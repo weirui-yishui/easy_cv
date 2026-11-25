@@ -158,7 +158,8 @@ function bindEvents() {
   // 排版面板：滑块和数字框都实时生效，并互相同步
   $('#layoutMenu').addEventListener('input', e => {
     const key = e.target.dataset.setting;
-    if (!key || !store.setSetting(key, e.target.value)) return;
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (!key || !store.setSetting(key, value)) return;
     syncLayoutUI();
   });
 
@@ -278,15 +279,15 @@ function addCustomColor() {
 }
 /* ---- 排版面板 ---- */
 function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
+function choiceRowHTML(key) {
+  const f = CHOICE_SETTINGS[key];
+  return '<div class="layout-row"><label>' + f.label + '</label><select data-setting="' + key + '">'
+    + '<option value="">' + (f.defaultLabel || '跟随主题') + '</option>'
+    + Object.keys(f.options).map(k => '<option value="' + k + '">' + f.options[k].label + '</option>').join('')
+    + '</select></div>';
+}
 function buildLayoutMenu() {
-  let html = '<div class="layout-group">字体</div>';
-  for (const key of Object.keys(FONT_SETTINGS)) {
-    const f = FONT_SETTINGS[key];
-    html += '<div class="layout-row"><label>' + f.label + '</label><select data-setting="' + key + '">'
-      + '<option value="">跟随主题</option>'
-      + Object.keys(f.options).map(k => '<option value="' + k + '">' + f.options[k].label + '</option>').join('')
-      + '</select></div>';
-  }
+  let html = '<div class="layout-group">字体</div>' + Object.keys(FONT_SETTINGS).map(choiceRowHTML).join('');
   LAYOUT_GROUPS.forEach((g, gi) => {
     html += '<div class="layout-group">' + g + '</div>';
     for (const d of LAYOUT_SETTINGS.filter(x => x.group === gi)) {
@@ -297,6 +298,8 @@ function buildLayoutMenu() {
         + '<span class="unit">' + d.unit + '</span></div>';
     }
   });
+  html += '<div class="layout-group">样式</div>' + choiceRowHTML('bulletStyle')
+    + TOGGLE_SETTINGS.map(t => '<label class="layout-check"><input type="checkbox" data-setting="' + t.key + '">' + t.label + '</label>').join('');
   $('#layout-rows').innerHTML = html;
 }
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
@@ -304,10 +307,11 @@ function syncLayoutUI() {
   const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
   document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
     const key = el.dataset.setting;
-    if (isFontSetting(key)) {
-      // 「跟随主题」后面标出当前主题实际用的字体
-      el.options[0].textContent = '跟随主题（' + FONT_SETTINGS[key].options[themeFonts[key]].label + '）';
-      el.value = fontChoice(store.state.settings, key) || '';
+    if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
+    if (isChoiceSetting(key)) {
+      // 字体的「跟随主题」后面标出当前主题实际用的字体
+      if (themeFonts[key]) el.options[0].textContent = '跟随主题（' + FONT_SETTINGS[key].options[themeFonts[key]].label + '）';
+      el.value = choiceValue(store.state.settings, key) || '';
       return;
     }
     if (el === document.activeElement && el.type === 'number') return;

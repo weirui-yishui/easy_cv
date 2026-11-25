@@ -51,6 +51,17 @@
 - 只写其中一个时，另一个取当前 `theme` 的默认值。
 - 都是系统字体，每个选项列了 Windows / macOS / Linux 上的同类字体；电脑上一个都没装时浏览器会换成别的字体（例如 Garamond、Calibri 在 macOS 上通常没有）。打印出的 PDF 使用打印时那台电脑实际用到的字体。
 
+**样式**
+
+| 字段 | 类型 | 可选值 / 默认 | 作用 |
+|---|---|---|---|
+| `bulletStyle` | string | `circle` / `square` / `dash` / `arrow` / `check` / `none`；不写 = 实心圆 • | 所有要点列表的项目符号；`none` 同时取消缩进 |
+| `showContactIcons` | boolean | 默认 `true` | `false` 时联系方式与链接前不显示图标（链接仍显示文字） |
+| `accentDivider` | boolean | 默认 `false` | `true` 时小节标题下的分隔线用主题色（默认浅灰） |
+| `skillsTwoColumns` | boolean | 默认 `false` | `true` 时技能行两两并排（每个 `skills` 块是一行）；内容长的行会在半栏内折行 |
+
+- 非法取值（未知选项、非布尔）按默认处理。编辑器里改回默认值时会删掉该键，导出的 JSON 只保留改过的项。
+
 **尺寸**（数字；超出范围的值钳到边界，非数字的值忽略）
 
 | 字段 | 单位 | 范围 | 默认 | 作用 |
@@ -72,7 +83,7 @@
 - 用 JSON Patch 修改：`settings` 不存在时，先 `{"op":"add","path":"/settings","value":{}}`，再改 `/settings/<字段>`（直接改子路径会报 path not found）。
 
 ```json
-"settings": { "latinFont": "times", "cjkFont": "kai", "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
+"settings": { "latinFont": "times", "cjkFont": "kai", "bulletStyle": "dash", "skillsTwoColumns": true, "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
 ```
 
 ## 2. 块（Block）基础结构

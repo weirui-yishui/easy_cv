@@ -45,7 +45,7 @@ function renderPreview(state) {
   };
   const accent = normalizeAccent(state.accent);
   const vars = layoutStyleVars(state.settings, themeKey);
-  $('#preview-pane').innerHTML = '<div class="page ' + themeKey + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div>';
+  $('#preview-pane').innerHTML = '<div class="page ' + themeKey + layoutClasses(state.settings) + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div>';
   // 打印页边距：@page 不能用 CSS 变量，改写 <head> 里的专用 <style>
   const pageStyle = $('#cv-page-style');
   if (pageStyle) pageStyle.textContent = pageMarginCSS(state.settings);

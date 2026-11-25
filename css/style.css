@@ -196,7 +196,7 @@ body {
 .page .dates { font-size: calc(var(--fs-base) * 9.5 / 10.5); color: #555; white-space: nowrap; }
 .page .entry p { margin: 2px 0; font-size: calc(var(--fs-base) * var(--s-body)); }
 .page .score { font-size: calc(var(--fs-base) * 9.5 / 10.5); color: #444; }
-.page ul { margin: 2px 0 2px 18px; padding: 0; }
+.page ul { margin: 2px 0 2px var(--bullet-indent, 18px); padding: 0; list-style-type: var(--bullet, disc); }
 .page li { font-size: calc(var(--fs-base) * var(--s-body)); }
 .page .tags-line { margin-top: 3px; }
 .page .ptag {
@@ -208,6 +208,11 @@ body {
 .page .skill-level { color: #555; }
 .page .custom-block { margin-bottom: 9px; }
 .page .custom-body p { margin: 4px 0; }
+/* ---- 排版面板「样式」开关（state.settings 里改过才会加这些 class） ---- */
+.page.no-contact-icons .cv-contact .ic, .page.no-contact-icons .cv-link .ic { display: none; }
+.page.accent-divider h2.section-title { border-bottom-color: var(--accent); }
+/* 每个技能块是一行；双栏 = 行改成半宽 inline-block，两两并排，小节标题（块级）自然断开 */
+.page.skills-2col .skill-row { display: inline-block; width: 50%; vertical-align: top; box-sizing: border-box; padding-right: 12px; }
 
 /* ============ 打印 ============ */
 @page {
@@ -283,6 +288,7 @@ body {
   flex: none; width: 62px; box-sizing: border-box; padding: 3px 4px; border: 1px solid var(--border);
   border-radius: 6px; font: inherit; font-size: 12px;
 }
+.layout-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; cursor: pointer; }
 .layout-row .unit { flex: none; width: 24px; font-size: 12px; color: var(--muted); }
 .layout-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
 

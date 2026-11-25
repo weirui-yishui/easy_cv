@@ -68,15 +68,47 @@ const FONT_SETTINGS = {
   }
 };
 const THEME_FONTS = { classic: { latinFont: 'georgia', cjkFont: 'song' }, modern: { latinFont: 'arial', cjkFont: 'hei' } };
-function isFontSetting(key) { return Object.prototype.hasOwnProperty.call(FONT_SETTINGS, key); }
-// 已设置且合法的字体键，否则 null
-function fontChoice(settings, key) {
+
+/* ---- 样式开关 ----
+ * 项目符号：'' / 未设置 = 默认实心圆 •（浏览器 disc）。css 值会拼进 style 属性，只用单引号。 */
+const BULLET_STYLES = {
+  circle: { label: '◦ 空心圆', css: 'circle' },
+  square: { label: '▪ 方块',   css: 'square' },
+  dash:   { label: '– 短横',   css: "'–  '" },
+  arrow:  { label: '› 箭头',   css: "'›  '" },
+  check:  { label: '✓ 对勾',   css: "'✓  '" },
+  none:   { label: '无（不缩进）', css: 'none' }
+};
+// 下拉框类设置（值是字符串枚举；'' = 删除该键 = 默认）
+const CHOICE_SETTINGS = Object.assign({}, FONT_SETTINGS, {
+  bulletStyle: { label: '项目符号', defaultLabel: '• 实心圆（默认）', options: BULLET_STYLES }
+});
+// 勾选框类设置：值与 def 不同时给 .page 加 cls
+const TOGGLE_SETTINGS = [
+  { key: 'showContactIcons', label: '联系方式与链接显示图标', def: true,  cls: 'no-contact-icons' },
+  { key: 'accentDivider',    label: '小节分隔线用主题色',     def: false, cls: 'accent-divider' },
+  { key: 'skillsTwoColumns', label: '技能分两栏排列',         def: false, cls: 'skills-2col' }
+];
+const hasOwnKey = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+function isChoiceSetting(key) { return hasOwnKey(CHOICE_SETTINGS, key); }
+function toggleDef(key) { return TOGGLE_SETTINGS.find(t => t.key === key) || null; }
+// 已设置且合法的选项键，否则 null
+function choiceValue(settings, key) {
   const v = settings && settings[key];
-  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(FONT_SETTINGS[key].options, v) ? v : null;
+  return typeof v === 'string' && hasOwnKey(CHOICE_SETTINGS[key].options, v) ? v : null;
+}
+// 勾选框当前值（未设置 / 非布尔 → 默认）
+function toggleValue(settings, key) {
+  const v = settings && settings[key];
+  return typeof v === 'boolean' ? v : toggleDef(key).def;
+}
+// .page 上追加的 class 串（开头带空格；全是默认时为 ''）
+function layoutClasses(settings) {
+  return TOGGLE_SETTINGS.filter(t => toggleValue(settings, t.key) !== t.def).map(t => ' ' + t.cls).join('');
 }
 // 两项都没设置 → ''（交给 .page.classic / .page.modern 的 CSS）；设置了任一项 → 另一项取主题默认
 function fontFamilyCSS(settings, themeKey) {
-  const lat = fontChoice(settings, 'latinFont'), cjk = fontChoice(settings, 'cjkFont');
+  const lat = choiceValue(settings, 'latinFont'), cjk = choiceValue(settings, 'cjkFont');
   if (!lat && !cjk) return '';
   const base = THEME_FONTS[themeKey] || THEME_FONTS.classic;
   const L = FONT_SETTINGS.latinFont.options[lat || base.latinFont];
@@ -106,6 +138,8 @@ function layoutStyleVars(settings, themeKey) {
   if (!settings) return s;
   const ff = fontFamilyCSS(settings, themeKey);
   if (ff) s += ';--body-font:' + ff + ';--head-font:' + ff;
+  const bullet = choiceValue(settings, 'bulletStyle');
+  if (bullet) s += ';--bullet:' + BULLET_STYLES[bullet].css + (bullet === 'none' ? ';--bullet-indent:0' : '');
   for (const d of LAYOUT_SETTINGS) {
     if (!d.cssVar) continue;
     const v = clampSetting(d.key, settings[d.key]);

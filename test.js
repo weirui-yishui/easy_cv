@@ -481,6 +481,37 @@ const tests = `
   assert(!els['#preview-pane'].innerHTML.includes('--body-font'), '恢复默认后回到主题字体');
   store.setTheme('classic');
 
+  // 17. 样式开关：项目符号 / 联系方式图标 / 主题色分隔线 / 技能双栏
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  const p17a = els['#preview-pane'].innerHTML;
+  assert(p17a.includes('<div class="page classic" style="--accent:#1f3864">'), '全默认：无额外 class、无额外变量');
+
+  assert(store.setSetting('bulletStyle', 'dash') === true, '选项目符号');
+  assert(els['#preview-pane'].innerHTML.includes("--bullet:'–  '") && !els['#preview-pane'].innerHTML.includes('--bullet-indent'), '短横：输出 --bullet，保留缩进');
+  store.setSetting('bulletStyle', 'none');
+  assert(els['#preview-pane'].innerHTML.includes('--bullet:none;--bullet-indent:0'), '无符号：取消缩进');
+  assert(store.setSetting('bulletStyle', 'star') === false && store.state.settings.bulletStyle === 'none', '未知符号拒绝');
+  store.setSetting('bulletStyle', '');
+  assert(!('bulletStyle' in store.state.settings), "'' = 默认实心圆，删除该键");
+
+  assert(store.setSetting('showContactIcons', false) === true, '关联系方式图标');
+  assert(store.state.settings.showContactIcons === false && els['#preview-pane'].innerHTML.includes('class="page classic no-contact-icons"'), '关图标 → no-contact-icons');
+  store.setSetting('showContactIcons', true);
+  assert(!('showContactIcons' in store.state.settings), '改回默认值时删除该键');
+  assert(store.setSetting('showContactIcons', 'false') === false, '勾选框只收布尔（字符串 "false" 拒绝）');
+
+  store.setSetting('accentDivider', true);
+  store.setSetting('skillsTwoColumns', true);
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic accent-divider skills-2col"'), '分隔线主题色 + 技能双栏 class');
+
+  store.state.settings.accentDivider = 'yes';   // 手改 JSON 的非布尔值
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('accent-divider'), '非布尔值按默认处理');
+
+  store.resetSettings();
+  assert(els['#preview-pane'].innerHTML.includes('<div class="page classic" style="--accent:#1f3864">'), '恢复默认后清掉所有开关');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

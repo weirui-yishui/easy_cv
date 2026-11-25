@@ -188,7 +188,10 @@ function bindEvents() {
       case 'menu-convert': {
         const b = store.state.blocks.find(x => x.id === menuBlockId);
         if (!b || b.type === 'header') break;
-        buildConvertMenu(b); showMenu($('#convertMenu'), p.getBoundingClientRect());
+        // 子菜单开在块菜单右侧，和「转换为…」这一项顶端对齐，不压住块菜单其他项
+        const r = p.getBoundingClientRect(), menuR = $('#blockMenu').getBoundingClientRect();
+        buildConvertMenu(b);
+        showMenu($('#convertMenu'), { left: menuR.right + 4, top: r.top, bottom: r.top - 4, right: menuR.right + 4 });
         break;
       }
       case 'convert-to': {

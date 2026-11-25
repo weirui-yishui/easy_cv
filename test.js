@@ -668,6 +668,25 @@ const tests = `
   assert(!('sectionTitles' in store.state.meta), '清空即恢复默认，空对象不留在 JSON 里');
   assert(sectionTitleFor('skills', { sectionTitles: { skills: 7 } }, 'zh') === '技能', '非字符串改名值被忽略');
 
+  // 21. 照片大小 / 比例，中文日期格式
+  assert(fmtDate('2022-06', 'YYYY.MM') === '2022.06' && fmtDate('2022-06', 'YYYY年M月') === '2022年6月', '中文日期格式');
+  assert(fmtDate('2022-11', 'YYYY年M月') === '2022年11月' && fmtDate('2022', 'YYYY年M月') === '2022', '两位月份、只有年份');
+  assert(rangeText('2021-09', '', true, 'YYYY年M月', 'zh') === '2021年9月 – 至今', '至今与中文日期组合');
+  store.setState(deepClone(SAMPLE));
+  store.setDateFormat('YYYY.MM');
+  assert(els['#preview-pane'].innerHTML.includes('2024.09 – Present'), '预览按 YYYY.MM 显示');
+
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('--photo-'), '照片未调：不输出变量（仍是 30×40mm）');
+  store.setSetting('photoWidth', 35);
+  store.setSetting('photoRatio', 'r57');
+  const p21 = els['#preview-pane'].innerHTML;
+  assert(p21.includes('--photo-hr:7 / 5') && p21.includes('--photo-w:35mm'), '照片宽度 + 一寸比例');
+  assert(store.setSetting('photoRatio', '16:9') === false, '未知比例拒绝');
+  store.setSetting('photoWidth', 200);
+  assert(store.state.settings.photoWidth === 60, '照片宽度钳到 60mm');
+  store.resetSettings();
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

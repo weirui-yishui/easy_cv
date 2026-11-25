@@ -131,7 +131,7 @@ const BLOCK_TYPES = {
       { key: 'location', label: '所在地', type: 'text' },
       { key: 'summary', label: '个人简介', type: 'textarea' },
       { key: 'showPhoto', label: '显示照片', type: 'checkbox' },
-      { key: 'photo', label: '照片（3:4 竖版最佳）', type: 'photo' },
+      { key: 'photo', label: '照片（大小和比例在右侧排版面板「头部」里调）', type: 'photo' },
       { key: 'links', label: '链接（谷歌学术 / GitHub / 领英等）', type: 'links' }
     ],
     renderHTML: headerRender

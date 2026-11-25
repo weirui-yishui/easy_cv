@@ -35,6 +35,7 @@ const LAYOUT_SETTINGS = [
   { key: 'marginRight',       label: '右',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 15 },
   { key: 'marginBottom',      label: '下',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 18 },
   { key: 'marginLeft',        label: '左',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 15 },
+  { key: 'photoWidth',        label: '照片宽度', unit: 'mm', min: 15,  max: 60,  step: 1,    def: 30,        cssVar: '--photo-w',     css: v => v + 'mm' },
   { key: 'photoOffsetX',      label: '照片左右', unit: 'mm', min: -20, max: 20,  step: 0.5,  def: 0,         cssVar: '--photo-dx',    css: v => v + 'mm' },
   { key: 'photoOffsetY',      label: '照片上下', unit: 'mm', min: -20, max: 20,  step: 0.5,  def: 0,         cssVar: '--photo-dy',    css: v => v + 'mm' }
 ];
@@ -92,7 +93,13 @@ const CHOICE_SETTINGS = Object.assign({}, FONT_SETTINGS, {
     zhTotal: { label: '第 1 页 / 共 3 页', css: '"第 " counter(page) " 页 / 共 " counter(pages) " 页"' },
     en:      { label: 'Page 1 of 3',     css: '"Page " counter(page) " of " counter(pages)' }
   } },
-  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' } } }
+  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' } } },
+  // css = 高 / 宽；照片按宽度 × 这个比例定高，object-fit: cover 居中裁切
+  photoRatio: { label: '照片比例', defaultLabel: '3:4（默认）', options: {
+    r57:    { label: '5:7（一寸 / 二寸照）', css: '7 / 5' },
+    r23:    { label: '2:3',                css: '3 / 2' },
+    square: { label: '1:1',                css: '1' }
+  } }
 });
 const PAGE_SIZES = { a4: { w: 210, h: 297, css: 'A4' }, letter: { w: 215.9, h: 279.4, css: 'letter' } };
 const DEFAULT_PAGE_NUMBER_CSS = 'counter(page) " / " counter(pages)';   // 与 style.css 的默认 @page 一致
@@ -113,7 +120,7 @@ const PANEL_LAYOUT = [
   { title: '分块字号（× 基准字号）', keys: ['nameScale', 'sectionTitleScale', 'contactScale', 'entryTitleScale', 'bodyScale'] },
   { title: '页边距',                keys: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'] },
   { title: '页面',                  keys: ['pageSize', 'pagedPreview', 'repeatSectionTitles', 'showPageNumbers', 'pageNumberPosition', 'pageNumberFormat'] },
-  { title: '头部',                  keys: ['headerAlign', 'photoOffsetX', 'photoOffsetY'] },
+  { title: '头部',                  keys: ['headerAlign', 'photoWidth', 'photoRatio', 'photoOffsetX', 'photoOffsetY'] },
   { title: '样式',                  keys: ['bulletStyle', 'showContactIcons', 'accentDivider', 'skillsTwoColumns'] }
 ];
 const hasOwnKey = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -166,6 +173,8 @@ function layoutStyleVars(settings, themeKey) {
   if (!settings) return s;
   const ff = fontFamilyCSS(settings, themeKey);
   if (ff) s += ';--body-font:' + ff + ';--head-font:' + ff;
+  const ratio = choiceValue(settings, 'photoRatio');
+  if (ratio) s += ';--photo-hr:' + CHOICE_SETTINGS.photoRatio.options[ratio].css;
   const bullet = choiceValue(settings, 'bulletStyle');
   if (bullet) s += ';--bullet:' + BULLET_STYLES[bullet].css + (bullet === 'none' ? ';--bullet-indent:0' : '');
   for (const d of LAYOUT_SETTINGS) {

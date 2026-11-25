@@ -214,7 +214,7 @@ body {
 .page .cv-header-main { flex: 1 1 auto; min-width: 0; } /* min-width:0 让长 URL 能换行而不撑破 flex */
 .page .cv-photo {
   flex: 0 0 auto;
-  width: 30mm; height: 40mm;    /* 3:4；A4 正文宽 180mm 的 1/6 */
+  width: var(--photo-w, 30mm); height: calc(var(--photo-w, 30mm) * var(--photo-hr, 4 / 3));   /* 默认 30×40mm（3:4）；排版面板「头部」可改宽度和比例 */
   object-fit: cover;            /* 自动居中裁切，不失真 */
   border-radius: 2px;
   position: relative; left: var(--photo-dx, 0px); top: var(--photo-dy, 0px);   /* 排版面板「照片左右/上下」，不影响其他元素位置 */

@@ -58,6 +58,8 @@ function fmtDate(ym, fmt) {
   if (!p[0]) return '';
   if (!p[1]) return p[0];
   if (fmt === 'YYYY-MM') return p[0] + '-' + p[1];
+  if (fmt === 'YYYY.MM') return p[0] + '.' + p[1];
+  if (fmt === 'YYYY年M月') return p[0] + '年' + (parseInt(p[1], 10) || p[1]) + '月';
   const mi = parseInt(p[1], 10) - 1;
   return (MONTHS[mi] || p[1]) + ' ' + p[0];
 }

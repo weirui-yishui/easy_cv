@@ -277,9 +277,9 @@ const tests = `
   const wHdr = withPhoto.blocks.find(b => b.type === 'header');
   wHdr.data.showPhoto = true;
   wHdr.data.photo = 'data:image/jpeg;base64,/9j/4AAQ';
-  const strict = JSONResume.toStrict(withPhoto);
-  assert(strict.basics.image === 'data:image/jpeg;base64,/9j/4AAQ', 'toStrict 写入 basics.image');
-  const backHdr = JSONResume.fromStrict(strict).blocks.find(b => b.type === 'header');
+  const strictP = JSONResume.toStrict(withPhoto);
+  assert(strictP.basics.image === 'data:image/jpeg;base64,/9j/4AAQ', 'toStrict 写入 basics.image');
+  const backHdr = JSONResume.fromStrict(strictP).blocks.find(b => b.type === 'header');
   assert(backHdr.data.photo === 'data:image/jpeg;base64,/9j/4AAQ' && backHdr.data.showPhoto === true,
     '严格往返后有照片：photo / showPhoto 均不丢');
 

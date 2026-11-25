@@ -33,7 +33,34 @@
 | `accent` | string | 主题色，存为 `#RRGGBB`；解析器也接受 `#RGB`、`rgb(r,g,b)`（整数或百分比），统一归一化为 hex；独立于字体 |
 | `meta.dateFormat` | string | `"MMM YYYY"`（显示 `Jun 2022`）或 `"YYYY-MM"`（显示 `2022-06`） |
 | `meta.language` | string | 可选，`"en"`（默认）或 `"zh"`。决定自动小节标题：`en`→Education / Work Experience / Research Experience / Projects / Skills；`zh`→教育经历 / 工作经历 / 研究经历 / 项目 / 技能；`current=true` 的结束时间也显示「至今」（`en` 为 Present）。`custom` 块标题始终用 `title` 字段原文，不受此影响 |
+| `settings` | object | 可选，排版设置，见 §1.1。缺省或为 `{}` 时用默认排版 |
 | `blocks` | array | 块数组，见下 |
+
+### 1.1 `settings` —— 排版设置（工具栏「排版 ▾」）
+
+所有字段可选，都是**数字**；只写想改的项，没写的用默认值。超出范围的值钳到边界，非数字的值忽略。
+
+| 字段 | 单位 | 范围 | 默认 | 作用 |
+|---|---|---|---|---|
+| `fontSize` | pt | 8–14 | 10.5 | 基准字号，下面的分块字号都乘以它 |
+| `lineHeight` | 倍 | 1–2 | 1.5 | 行距 |
+| `sectionSpacing` | px | 0–40 | 15 | 小节标题上方的间距 |
+| `nameScale` | × 基准 | 1–2.5 | 1.81（=19/10.5） | 姓名 |
+| `sectionTitleScale` | × 基准 | 0.8–1.6 | 1 | 小节标题 |
+| `contactScale` | × 基准 | 0.7–1.2 | 0.905（=9.5/10.5） | 联系方式、链接、自定义信息 |
+| `entryTitleScale` | × 基准 | 0.8–1.4 | 1 | 条目标题（学校 / 职位 / 项目名） |
+| `bodyScale` | × 基准 | 0.7–1.2 | 0.952（=10/10.5） | 正文：简介、描述、要点、技能行 |
+| `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | mm | 0–30 | 16 / 15 / 18 / 15 | 页边距。预览和打印 PDF 使用同一组值 |
+
+- 头衔、机构、日期、成绩、标签这些辅助文字没有单独的倍率，跟随 `fontSize` 等比缩放。
+- 页码印在下边距里；`marginBottom` 设得很小时页码可能贴边或被裁掉。
+- 只要写了任意一个 `margin*`，四边都生效（没写的边取默认值）。完全不写 `margin*` 时，预览页面内边距为 14mm 15mm、打印为 16/15/18/15mm（加入本设置前的行为）。
+- 严格 JSON Resume 格式没有排版字段，导出严格格式时 `settings` 不保留。
+- 用 JSON Patch 修改：`settings` 不存在时，先 `{"op":"add","path":"/settings","value":{}}`，再改 `/settings/<字段>`（直接改子路径会报 path not found）。
+
+```json
+"settings": { "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
+```
 
 ## 2. 块（Block）基础结构
 

@@ -401,6 +401,54 @@ const tests = `
   assert(!safeHtml.includes('<img'), '不产生真实的 img 标签');
   assert(!headerRender({ data: { name: '<b>x</b>' } }, tctx).includes('<b>x</b>'), '不加 ** 时标签照旧被转义');
 
+  // 15. 排版设置（state.settings → .page 上的 CSS 变量 + 打印 @page）
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  const p15a = els['#preview-pane'].innerHTML;
+  assert(p15a.includes('style="--accent:#1f3864">'), '无 settings：.page 只有 --accent，不输出排版变量');
+  assert(els['#cv-page-style'].textContent === '', '无 settings：不覆盖默认 @page');
+
+  assert(store.setSetting('fontSize', 12) === true, 'setSetting 接受合法值');
+  assert(store.setSetting('lineHeight', '1.3') === true, 'setSetting 接受数字字符串（来自 input.value）');
+  store.setSetting('nameScale', 1.6);
+  const p15b = els['#preview-pane'].innerHTML;
+  assert(p15b.includes('--fs-base:12pt') && p15b.includes('--lh:1.3') && p15b.includes('--s-name:1.6'), '已设置项输出为 CSS 变量');
+  assert(!p15b.includes('--s-body') && !p15b.includes('--m-page'), '未设置项不输出');
+
+  assert(store.setSetting('fontSize', 99) === true && store.state.settings.fontSize === 14, '超上限钳到 max');
+  assert(store.setSetting('lineHeight', -5) === true && store.state.settings.lineHeight === 1, '低于下限钳到 min');
+  assert(store.setSetting('fontSize', 'abc') === false && store.state.settings.fontSize === 14, '非数字拒绝且不改状态');
+  assert(store.setSetting('fontSize', '') === false, '空串拒绝（清空数字框时不应变成 0）');
+  assert(store.setSetting('nope', 1) === false, '未知键拒绝');
+
+  // 拖动同一滑块合并为一步撤销
+  store.setSetting('bodyScale', 0.9); store.setSetting('bodyScale', 0.85); store.setSetting('bodyScale', 0.8);
+  store.undo();
+  assert(!('bodyScale' in store.state.settings), '同一项连续修改一次撤销');
+
+  // 页边距：设置任意一边 → 四边都输出（未设的用默认），预览 padding 与打印 @page 一致
+  store.setSetting('marginTop', 10);
+  assert(els['#preview-pane'].innerHTML.includes('--m-page:10mm 15mm 18mm 15mm'), '预览页边距四边齐全');
+  assert(els['#cv-page-style'].textContent === '@page { margin: 10mm 15mm 18mm 15mm; }', '打印 @page 同步');
+
+  // 手改 JSON / JSON Patch 塞进的非法值不会进入 style 属性
+  store.state.settings.fontSize = '12pt;background:url(x)';
+  store.state.settings.marginLeft = 'x';
+  renderPreview(store.state);
+  const p15c = els['#preview-pane'].innerHTML;
+  assert(!p15c.includes('background') && !p15c.includes('--fs-base'), '非法 fontSize 被丢弃');
+  assert(p15c.includes('--m-page:10mm 15mm 18mm 15mm'), '非法 marginLeft 回落默认值');
+
+  store.resetSettings();
+  assert(!('settings' in store.state), 'resetSettings 删除 settings');
+  assert(els['#preview-pane'].innerHTML.includes('style="--accent:#1f3864">') && els['#cv-page-style'].textContent === '', '恢复默认后输出与未设置时一致');
+  store.undo();
+  assert(store.state.settings && store.state.settings.marginTop === 10, '恢复默认可撤销');
+
+  // 默认倍率 × 基准字号 = 改动前的写死字号
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert(near(10.5 * settingValue(null, 'nameScale'), 19) && near(10.5 * settingValue(null, 'contactScale'), 9.5) && near(10.5 * settingValue(null, 'bodyScale'), 10), '默认倍率还原原字号');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

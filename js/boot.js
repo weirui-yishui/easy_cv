@@ -131,6 +131,8 @@ function bindEvents() {
       case 'swatch-edit': startEditSwatch(swatchMenuHex); break;
       case 'swatch-del': removeCustomColor(swatchMenuHex); hideMenus(); showToast('已删除 ' + swatchMenuHex); break;
       case 'accent-random': { const hex = randomAccent(); store.setAccent(hex); syncAccentUI(); showToast('随机配色 ' + hex); break; }
+      case 'dd-layout': syncLayoutUI(); showMenu($('#layoutMenu'), p.getBoundingClientRect()); break;
+      case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
       case 'close-settings': closeSettings(); break;
@@ -151,6 +153,13 @@ function bindEvents() {
       store.setField(id, 'photo', url);
       renderPhotoField(id);
     } catch (err) { showToast(err.message); }
+  });
+
+  // 排版面板：滑块和数字框都实时生效，并互相同步
+  $('#layoutMenu').addEventListener('input', e => {
+    const key = e.target.dataset.setting;
+    if (!key || !store.setSetting(key, e.target.value)) return;
+    syncLayoutUI();
   });
 
   // 配色输入框回车：编辑模式保存修改，否则应用为主题色
@@ -267,6 +276,29 @@ function addCustomColor() {
   buildColorMenu(); syncAccentUI();
   showToast('已添加 ' + hex);
 }
+/* ---- 排版面板 ---- */
+function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
+function buildLayoutMenu() {
+  let html = '';
+  LAYOUT_GROUPS.forEach((g, gi) => {
+    html += '<div class="layout-group">' + g + '</div>';
+    for (const d of LAYOUT_SETTINGS.filter(x => x.group === gi)) {
+      const attrs = ' data-setting="' + d.key + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '"';
+      html += '<div class="layout-row"><label>' + d.label + '</label>'
+        + '<input type="range"' + attrs + '>'
+        + '<input type="number"' + attrs + '>'
+        + '<span class="unit">' + d.unit + '</span></div>';
+    }
+  });
+  $('#layout-rows').innerHTML = html;
+}
+// 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
+function syncLayoutUI() {
+  document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
+    if (el === document.activeElement && el.type === 'number') return;
+    el.value = fmtSetting(settingValue(store.state.settings, el.dataset.setting));
+  });
+}
 function buildAddMenu() {
   $('#addMenu').innerHTML = Object.keys(BLOCK_TYPES).map(k => {
     const t = BLOCK_TYPES[k];
@@ -276,11 +308,13 @@ function buildAddMenu() {
 function boot() {
   buildAddMenu();
   buildColorMenu();
+  buildLayoutMenu();
   refreshSaveTarget(); // 工具栏提示当前 Ctrl+S 保存位置
   store = new StateStore(loadInitial());
   store.subscribe((state, kind) => {
     renderPreview(state);
     if (kind === 'structure') renderEditor();
+    if (!$('#layoutMenu').hidden) syncLayoutUI();   // 撤销/重做时面板数值跟着变
     updateToolbar();
   });
   renderEditor();

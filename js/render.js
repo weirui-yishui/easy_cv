@@ -44,5 +44,9 @@ function renderPreview(state) {
     list: zh ? '，' : ', '     // 列表分隔符（中/英）
   };
   const accent = normalizeAccent(state.accent);
-  $('#preview-pane').innerHTML = '<div class="page ' + themeKey + '" style="--accent:' + accent + '">' + renderSequence(state.blocks, ctx) + '</div>';
+  const vars = layoutStyleVars(state.settings);
+  $('#preview-pane').innerHTML = '<div class="page ' + themeKey + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div>';
+  // 打印页边距：@page 不能用 CSS 变量，改写 <head> 里的专用 <style>
+  const pageStyle = $('#cv-page-style');
+  if (pageStyle) pageStyle.textContent = pageMarginCSS(state.settings);
 }

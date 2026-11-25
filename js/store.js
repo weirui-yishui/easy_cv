@@ -156,6 +156,19 @@ class StateStore {
     this.commit(null, 'structure');
     return true;
   }
+  // 排版设置：拖动滑块时同一项合并为一步撤销
+  setSetting(key, value) {
+    const v = clampSetting(key, value);
+    if (v === null) return false;
+    this.state.settings = this.state.settings || {};
+    this.state.settings[key] = v;
+    this.commit('settings:' + key, 'data');
+    return true;
+  }
+  resetSettings() {
+    delete this.state.settings;
+    this.commit(null, 'data');
+  }
   applyPatch(patches) {
     try { for (const p of patches) JSONPatch.apply(this.state, p); }
     catch (err) { return { ok: false, error: String(err) }; }

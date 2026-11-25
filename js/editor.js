@@ -74,7 +74,7 @@ function renderFields(b, t) {
   const rows = [];
   let buf = [];
   const flush = () => { if (buf.length) { rows.push('<div class="field-row">' + buf.join('') + '</div>'); buf = []; } };
-  for (const f of t.fields) {
+  for (const f of (t.fieldsFor ? t.fieldsFor(b) : t.fields)) {
     if (f.inline) { buf.push(fieldHTML(b, f)); continue; }
     flush();
     rows.push(fieldHTML(b, f));

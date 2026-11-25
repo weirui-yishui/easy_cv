@@ -92,8 +92,9 @@ class StateStore {
     this.history = [deepClone(s)]; this.historyIdx = 0; this.lastMergeKey = null;
     this.autosave(); this.emit('structure');
   }
-  addBlock(type, afterId) {
+  addBlock(type, afterId, dataPatch) {
     const blk = BlockRegistry.make(type);
+    if (dataPatch) Object.assign(blk.data, dataPatch);   // 栏目模板：预填 title / layout
     const idx = afterId ? this.state.blocks.findIndex(b => b.id === afterId) + 1 : this.state.blocks.length;
     this.state.blocks.splice(idx, 0, blk);
     this.commit(null, 'structure');
@@ -128,6 +129,26 @@ class StateStore {
     const [b] = this.state.blocks.splice(i, 1);
     this.state.blocks.splice(j, 0, b);
     this.commit(null, 'structure');
+  }
+  convertBlock(id, toType, layout) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b) return false;
+    const lang = (this.state.meta && this.state.meta.language) === 'zh' ? 'zh' : 'en';
+    const data = convertBlockData(b, toType, layout, sectionTitleFor(b.type, this.state.meta, lang));
+    if (!data) return false;
+    b.type = toType;
+    b.data = data;
+    this.commit(null, 'structure');
+    return true;
+  }
+  // 小节标题改名：'' = 恢复默认（按语言自动）
+  setSectionTitle(type, title) {
+    this.state.meta = this.state.meta || {};
+    const map = Object.assign({}, this.state.meta.sectionTitles);
+    const t = String(title || '').trim();
+    if (t) map[type] = t; else delete map[type];
+    if (Object.keys(map).length) this.state.meta.sectionTitles = map; else delete this.state.meta.sectionTitles;
+    this.commit(null, 'data');
   }
   toggleVisible(id) {
     const b = this.state.blocks.find(x => x.id === id);

@@ -78,9 +78,11 @@
   <div class="menu-item danger" data-act="swatch-del">✕ 删除</div>
 </div>
 <div class="menu" id="addMenu" hidden></div>
+<div class="menu" id="convertMenu" hidden></div>
 <div class="menu" id="blockMenu" hidden>
   <div class="menu-item" data-act="menu-insert">+ 在此后插入</div>
   <div class="menu-item" data-act="menu-dup">⧉ 复制</div>
+  <div class="menu-item" data-act="menu-convert" id="menu-convert">⇄ 转换为…</div>
   <div class="menu-item danger" data-act="menu-del">✕ 删除</div>
 </div>
 
@@ -101,9 +103,28 @@
         <option value="zh">中文（教育经历 / 工作经历 …）</option>
       </select>
     </div>
+    <div class="field">
+      <label>小节标题（留空 = 按语言自动）</label>
+      <div class="section-title-grid" id="set-section-titles"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn primary" data-act="save-settings">保存</button>
       <button class="btn" data-act="close-settings">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="sections-modal" hidden>
+  <div class="modal">
+    <h3>管理栏目</h3>
+    <p class="modal-hint">这里的栏目会出现在「+」菜单里，新建时自动填好小节标题和版式。列表只保存在本浏览器；删掉栏目不影响已经写好的内容。</p>
+    <div class="tpl-head"><span>中文标题</span><span>英文标题（可选）</span><span>版式</span><span></span></div>
+    <div id="tpl-rows"></div>
+    <button class="btn small" data-act="tpl-add">+ 添加栏目</button>
+    <div class="modal-actions">
+      <button class="btn" data-act="tpl-reset" style="margin-right:auto">恢复预设</button>
+      <button class="btn primary" data-act="tpl-save">保存</button>
+      <button class="btn" data-act="tpl-close">取消</button>
     </div>
   </div>
 </div>

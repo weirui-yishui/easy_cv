@@ -95,14 +95,27 @@ function skillsRender(b, ctx) {
     + '</div>';
 }
 function customRender(b, ctx) {
-  // 标题由 renderSequence 统一输出（相同 title 自动合并），这里只渲染内容
+  // 标题由 renderSequence 统一输出（相同 title 自动合并），这里只渲染内容。
+  // 版式：entry = 经历型（同工作经历）；list = 列表型（每行一条要点）；text = 段落型（自我评价等，换行保留）
+  const d = b.data;
+  const layout = customLayout(d);
+  if (layout === 'list') {
+    const items = (d.items || []).filter(Boolean);
+    return '<section class="custom-block">' + (items.length ? '<ul>' + items.map(x => '<li>' + ctx.inline(x) + '</li>').join('') + '</ul>' : '') + '</section>';
+  }
+  if (layout === 'text') {
+    const paras = String(d.content || '').split('\n').map(x => x.trim()).filter(Boolean);
+    return '<section class="custom-block">' + paras.map(x => '<p class="custom-text">' + ctx.inline(x) + '</p>').join('') + '</section>';
+  }
   return '<section class="custom-block">' + experienceRender(b, ctx) + '</section>';
 }
+const CUSTOM_LAYOUTS = { entry: '经历型（职位 / 机构 / 时间 / 要点）', list: '列表型（每行一条）', text: '段落型（大段文字）' };
+function customLayout(d) { return d && CUSTOM_LAYOUTS[d.layout] ? d.layout : 'entry'; }
 
 /* 自动小节标题的多语言映射（zh 与「+」添加菜单的中文标签一致） */
 const SECTION_TITLES = {
   en: { education: 'Education', work: 'Work Experience', research: 'Research Experience', projects: 'Projects', skills: 'Skills' },
-  zh: { education: '教育经历', work: '工作经历', research: '研究经历', projects: '项目', skills: '技能' }
+  zh: { education: '教育经历', work: '工作经历', research: '研究经历', projects: '项目经历', skills: '技能' }
 };
 
 const BLOCK_TYPES = {
@@ -173,7 +186,7 @@ const BLOCK_TYPES = {
     renderHTML: experienceRender
   },
   projects: {
-    key: 'projects', label: '项目', icon: 'folder', sectionTitle: 'Projects',
+    key: 'projects', label: '项目经历', icon: 'folder', sectionTitle: 'Projects',
     defaults: () => ({ name: '', url: '', description: '', startDate: '', endDate: '', current: false, keywords: [], roles: [], highlights: [] }),
     fields: [
       { key: 'name', label: '项目名', type: 'text' },
@@ -199,9 +212,18 @@ const BLOCK_TYPES = {
   },
   custom: {
     key: 'custom', label: '自定义', icon: 'grid', sectionTitle: null,
-    defaults: () => ({ title: '', position: '', organization: '', location: '', startDate: '', endDate: '', current: false, url: '', summary: '', highlights: [] }),
+    defaults: () => ({ title: '', layout: 'entry', position: '', organization: '', location: '', startDate: '', endDate: '', current: false, url: '', summary: '', highlights: [], items: [], content: '' }),
+    // 编辑器按版式显示不同字段（renderFields 优先用 fieldsFor）
+    fieldsFor(b) {
+      const head = this.fields.slice(0, 2);
+      const layout = customLayout(b.data);
+      if (layout === 'list') return head.concat([{ key: 'items', label: '条目（每行一条，支持 **加粗**）', type: 'bullets' }]);
+      if (layout === 'text') return head.concat([{ key: 'content', label: '内容（换行即分段）', type: 'textarea' }]);
+      return this.fields;
+    },
     fields: [
       { key: 'title', label: '标题（小节标题）', type: 'text' },
+      { key: 'layout', label: '版式', type: 'select', options: Object.keys(CUSTOM_LAYOUTS).map(k => ({ v: k, l: CUSTOM_LAYOUTS[k] })) },
       { key: 'position', label: '职位 / 项目', type: 'text' },
       { key: 'organization', label: '公司 / 机构', type: 'text' },
       { key: 'location', label: '地点', type: 'text' },
@@ -234,4 +256,65 @@ function blockSummary(b) {
     case 'custom': return d.title || '';
     default: return '';
   }
+}
+
+/* ---- 栏目模板（「+」菜单里的预置栏目，可在「管理栏目」里增删；列表存浏览器） ----
+ * 模板只用来新建块：新块是一个 custom 块，自己记着 title 和 layout，所以删模板不影响已写好的内容。 */
+const SECTION_TEMPLATE_PRESETS = [
+  { title: '实习经历', en: 'Internships',           layout: 'entry' },
+  { title: '校园经历', en: 'Campus Involvement',    layout: 'entry' },
+  { title: '志愿服务', en: 'Volunteering',          layout: 'entry' },
+  { title: '获奖荣誉', en: 'Honors & Awards',       layout: 'entry' },
+  { title: '论文发表', en: 'Publications',          layout: 'list' },
+  { title: '证书资质', en: 'Certifications',        layout: 'list' },
+  { title: '语言能力', en: 'Languages',             layout: 'list' },
+  { title: '兴趣爱好', en: 'Interests',             layout: 'list' },
+  { title: '自我评价', en: 'Summary',               layout: 'text' }
+];
+
+/* ---- 块类型转换（「⋯ → 转换为」） ----
+ * 各类型的「主标题 / 机构 / 概述 / 要点」字段名不同，先读成统一的四项再写进目标类型；
+ * 原数据整体保留在 data 里（渲染器忽略不认识的键），转回原类型时没被改过的内容原样恢复。
+ * 地点、起止时间、在读/至今、链接各类型同名，直接沿用。header 不参与转换。 */
+const CONVERT_KEYS = {
+  education: { primary: 'degree',   org: 'institution', summary: null,          list: 'highlights' },
+  work:      { primary: 'position', org: 'organization', summary: 'summary',    list: 'highlights' },
+  research:  { primary: 'position', org: 'organization', summary: 'summary',    list: 'highlights' },
+  projects:  { primary: 'name',     org: null,           summary: 'description', list: 'highlights' },
+  skills:    { primary: 'name',     org: null,           summary: null,          list: 'keywords' }
+};
+function convertKeysFor(type, data) {
+  if (type !== 'custom') return CONVERT_KEYS[type] || null;
+  const layout = customLayout(data);
+  if (layout === 'list') return { primary: null, org: null, summary: null, list: 'items' };
+  if (layout === 'text') return { primary: null, org: null, summary: 'content', list: null };
+  return CONVERT_KEYS.work;
+}
+// 返回新的 data（不修改传入的块）。toType 为 'custom' 时 layout 指定版式。
+function convertBlockData(b, toType, layout, sectionTitle) {
+  const from = convertKeysFor(b.type, b.data);
+  const target = BLOCK_TYPES[toType];
+  if (!from || !target || toType === 'header') return null;
+  const data = Object.assign(target.defaults(), deepClone(b.data));
+  if (toType === 'custom') {
+    data.layout = CUSTOM_LAYOUTS[layout] ? layout : 'entry';
+    if (!String(data.title || '').trim()) data.title = sectionTitle || '';
+  }
+  const to = convertKeysFor(toType, data);
+  const val = k => (k && from[k] ? b.data[from[k]] : undefined);
+  // 主标题：教育的「学位 + 专业」合成一项；转成教育时写进学位
+  let primary = val('primary');
+  if (b.type === 'education' && b.data.area) primary = [b.data.degree, b.data.area].filter(Boolean).join(' ');
+  let list = val('list'), summary = val('summary');
+  // 转成段落型 / 列表型时，不让主标题、机构、要点凭空消失：并进可显示的那一项
+  if (to.list === null && to.summary) {
+    summary = [primary, val('org'), summary].concat(list || []).filter(Boolean).join('\n');
+  } else if (to.primary === null && to.list) {
+    list = [[primary, val('org')].filter(Boolean).join(' · ')].concat(summary ? [summary] : [], list || []).filter(Boolean);
+  }
+  if (to.primary && primary !== undefined) data[to.primary] = primary;
+  if (to.org && val('org') !== undefined) data[to.org] = val('org');
+  if (to.summary && summary !== undefined) data[to.summary] = summary;
+  if (to.list && list !== undefined) data[to.list] = Array.isArray(list) ? list.slice() : [];
+  return data;
 }

@@ -249,6 +249,7 @@ body {
 .page .skill-level { color: #555; }
 .page .custom-block { margin-bottom: 9px; }
 .page .custom-body p { margin: 4px 0; }
+.page .custom-text { margin: 2px 0; font-size: calc(var(--fs-base) * var(--s-body)); }
 /* ---- 排版面板「样式」开关（state.settings 里改过才会加这些 class） ---- */
 .page.no-contact-icons .cv-contact .ic, .page.no-contact-icons .cv-link .ic { display: none; }
 .page.accent-divider h2.section-title { border-bottom-color: var(--accent); }
@@ -306,6 +307,14 @@ body {
 .modal { background: #fff; border-radius: 12px; padding: 18px; min-width: 300px; max-width: 90vw; max-height: 86vh; overflow-y: auto; }
 .modal h3 { margin: 0 0 12px; font-size: 15px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; max-width: 520px; }
+.menu-sep { font-size: 11px; color: var(--muted); padding: 6px 10px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.section-title-grid { display: grid; grid-template-columns: 70px 1fr; gap: 6px 8px; align-items: center; font-size: 13px; }
+.section-title-grid input { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 13px; }
+.tpl-head, .tpl-row { display: grid; grid-template-columns: 1fr 1fr 150px 24px; gap: 6px; align-items: center; }
+.tpl-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.tpl-row { margin-bottom: 6px; }
+.tpl-row input, .tpl-row select { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 13px; min-width: 0; }
 
 /* ============ 配色菜单 ============ */
 #colorMenu { min-width: 250px; }

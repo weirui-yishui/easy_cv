@@ -602,6 +602,72 @@ const tests = `
   const evilId = { id: 'x" onclick="alert(1)', type: 'skills', data: { name: 'S', keywords: [] }, visible: true };
   assert(!renderSequence([evilId], tctx).includes('onclick="alert'), '块 id 被转义，不能注入属性');
 
+  // 20. 栏目：项目经历 / 自定义版式 / 栏目模板 / 类型转换 / 小节标题改名
+  store.setState(deepClone(SAMPLE));
+  store.addBlock('projects');
+  store.setLanguage('zh');
+  assert(els['#preview-pane'].innerHTML.includes('section-title">项目经历<'), '中文小节标题：项目经历');
+  assert(BLOCK_TYPES.projects.label === '项目经历', '添加菜单标签：项目经历');
+
+  // 自定义块三种版式
+  const cl = r => customRender({ data: r }, zhCtx);
+  assert(cl({ title: 'T', position: 'P' }).includes('<h3>P</h3>'), '缺 layout 的旧 custom 按经历型渲染');
+  assert(cl({ layout: 'list', items: ['**CET-6**', '', 'IELTS 7.5'] }) === '<section class="custom-block"><ul><li><strong>CET-6</strong></li><li>IELTS 7.5</li></ul></section>', '列表型：每行一条、空行跳过、支持加粗');
+  assert(cl({ layout: 'text', content: '第一段' + String.fromCharCode(10, 10) + '第二段 <b>' }) === '<section class="custom-block"><p class="custom-text">第一段</p><p class="custom-text">第二段 &lt;b&gt;</p></section>', '段落型：换行分段、转义');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: { layout: 'list' } }).map(f => f.key).join() === 'title,layout,items', '列表型编辑器字段');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: { layout: 'text' } }).map(f => f.key).join() === 'title,layout,content', '段落型编辑器字段');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: {} }).length === BLOCK_TYPES.custom.fields.length, '经历型显示全部字段');
+
+  // 栏目模板（存浏览器，缺省为预设）
+  localStorage.removeItem('easy_cv.sectionTemplates');
+  assert(getSectionTemplates().length === SECTION_TEMPLATE_PRESETS.length, '没存过 → 预设');
+  saveSectionTemplates([{ title: '  科研项目 ', en: 'Research Projects', layout: 'entry' }, { title: '', layout: 'list' }, { title: '爱好', layout: 'bogus' }]);
+  assert(JSON.stringify(getSectionTemplates()) === JSON.stringify([{ title: '科研项目', en: 'Research Projects', layout: 'entry' }, { title: '爱好', en: '', layout: 'entry' }]), '保存时去空标题、修正非法版式');
+  localStorage.setItem('easy_cv.sectionTemplates', '{bad json');
+  assert(getSectionTemplates().length === SECTION_TEMPLATE_PRESETS.length, '存坏了 → 回退预设');
+  saveSectionTemplates([{ title: '科研项目', en: 'Research Projects', layout: 'list' }]);
+  const tplId = addBlockFromTemplate(0, null);
+  const tplBlk = store.state.blocks.find(b => b.id === tplId);
+  assert(tplBlk.type === 'custom' && tplBlk.data.title === '科研项目' && tplBlk.data.layout === 'list', '中文模式用中文标题建块');
+  store.setLanguage('en');
+  const tplId2 = addBlockFromTemplate(0, null);
+  assert(store.state.blocks.find(b => b.id === tplId2).data.title === 'Research Projects', '英文模式用英文标题');
+  localStorage.removeItem('easy_cv.sectionTemplates');
+
+  // 类型转换：保留原数据，转回去可恢复
+  store.setState(deepClone(SAMPLE));
+  const wk = store.state.blocks.find(b => b.type === 'research');
+  const orig = deepClone(wk.data);
+  assert(store.convertBlock(wk.id, 'education') === true, '研究经历 → 教育经历');
+  let cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.type === 'education' && cv.data.degree === orig.position && cv.data.institution === orig.organization, '主标题→学位、机构→学校');
+  assert(JSON.stringify(cv.data.highlights) === JSON.stringify(orig.highlights) && cv.data.startDate === orig.startDate, '要点、日期保留');
+  store.convertBlock(wk.id, 'research');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(['position', 'organization', 'summary', 'highlights', 'startDate', 'current'].every(k => JSON.stringify(cv.data[k]) === JSON.stringify(orig[k])), '转回原类型：内容原样恢复');
+
+  store.convertBlock(wk.id, 'custom', 'text');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.data.layout === 'text' && cv.data.title === 'Research Experience', '转成自定义：小节标题取原类型标题');
+  assert(cv.data.content.startsWith(orig.position + String.fromCharCode(10) + orig.organization) && cv.data.content.includes(orig.highlights[0]), '转段落型：标题、机构、要点并进正文，不丢内容');
+  store.convertBlock(wk.id, 'custom', 'list');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.data.layout === 'list' && cv.data.items.length > 0, '段落型 → 列表型');
+  store.undo();
+  assert(customLayout(store.state.blocks.find(b => b.id === wk.id).data) === 'text', '撤销一步回到段落型');
+  store.undo(); store.undo(); store.undo();
+  assert((x => x.type === 'research' && JSON.stringify(x.data) === JSON.stringify(orig))(store.state.blocks.find(b => b.id === wk.id)), '四次转换全部撤销后与原块完全一致');
+  assert(store.convertBlock(store.state.blocks[0].id, 'work') === false && store.state.blocks[0].type === 'header', '个人信息不能转换');
+  assert(store.convertBlock(wk.id, 'nope') === false, '未知目标类型拒绝');
+
+  // 小节标题改名
+  store.setSectionTitle('education', '  教育背景 ');
+  assert(store.state.meta.sectionTitles.education === '教育背景', '改名去首尾空格');
+  assert(els['#preview-pane'].innerHTML.includes('section-title">教育背景<') && !els['#preview-pane'].innerHTML.includes('>Education<'), '预览使用改后的标题（不受语言影响）');
+  store.setSectionTitle('education', '');
+  assert(!('sectionTitles' in store.state.meta), '清空即恢复默认，空对象不留在 JSON 里');
+  assert(sectionTitleFor('skills', { sectionTitles: { skills: 7 } }, 'zh') === '技能', '非字符串改名值被忽略');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

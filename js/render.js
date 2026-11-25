@@ -11,8 +11,7 @@ function renderSequence(blocks, ctx) {
     if (!t) continue;
     if (t.sectionTitle && b.type !== lastType) {
       const lang = (ctx && ctx.lang === 'zh') ? 'zh' : 'en';
-      const title = (SECTION_TITLES[lang] && SECTION_TITLES[lang][b.type]) || t.sectionTitle;
-      html += '<h2 class="section-title">' + escapeHTML(title) + '</h2>';
+      html += '<h2 class="section-title">' + escapeHTML(sectionTitleFor(b.type, ctx && ctx.meta, lang)) + '</h2>';
     }
     if (b.type === 'custom') {
       // 自定义块：相同 title 自动合并为一个标题（仅连续块；隔其他类型则各自出标题）
@@ -28,6 +27,13 @@ function renderSequence(blocks, ctx) {
   }
   return html;
 }
+// 自动小节标题：meta.sectionTitles 里改过名的优先，否则按语言取默认
+function sectionTitleFor(type, meta, lang) {
+  const custom = meta && meta.sectionTitles && meta.sectionTitles[type];
+  if (typeof custom === 'string' && custom.trim()) return custom.trim();
+  const t = BLOCK_TYPES[type];
+  return (SECTION_TITLES[lang] && SECTION_TITLES[lang][type]) || (t && t.sectionTitle) || '';
+}
 function renderPreview(state) {
   const themeKey = THEMES[state.theme] ? state.theme : 'classic';
   const fmt = (state.meta && state.meta.dateFormat) || 'MMM YYYY';
@@ -41,6 +47,7 @@ function renderPreview(state) {
     fmtDate: v => fmtDate(v, fmt),
     range: (s, e, c) => rangeText(s, e, c, fmt, lang),
     lang,
+    meta: state.meta,
     colon: zh ? '：' : ': ',   // 冒号（中/英）
     list: zh ? '，' : ', '     // 列表分隔符（中/英）
   };

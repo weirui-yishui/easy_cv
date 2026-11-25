@@ -24,7 +24,13 @@ function bindEvents() {
       case 'toggle': store.toggleCollapsed(id); break;
       case 'up': store.moveBlock(id, -1); break;
       case 'down': store.moveBlock(id, 1); break;
-      case 'menu': menuBlockId = id; showMenu($('#blockMenu'), a.getBoundingClientRect()); break;
+      case 'menu': {
+        menuBlockId = id;
+        const b = store.state.blocks.find(x => x.id === id);
+        $('#menu-convert').hidden = !b || b.type === 'header';
+        showMenu($('#blockMenu'), a.getBoundingClientRect());
+        break;
+      }
       case 'visible': store.toggleVisible(id); break;
     }
   });
@@ -132,6 +138,7 @@ function bindEvents() {
     if (el.matches('select[data-field]')) {
       const card = el.closest('.block-card');
       store.setField(card.dataset.blockId, el.dataset.field, el.value);
+      if (el.dataset.field === 'layout') renderEditor();   // 换版式 = 换一套字段
     }
   });
 
@@ -175,6 +182,25 @@ function bindEvents() {
       }
       case 'menu-insert': addMenuAfterId = menuBlockId; showMenu($('#addMenu'), p.getBoundingClientRect()); break;
       case 'menu-dup': { const nid = store.duplicateBlock(menuBlockId); hideMenus(); focusBlock(nid); break; }
+      case 'menu-convert': {
+        const b = store.state.blocks.find(x => x.id === menuBlockId);
+        if (!b || b.type === 'header') break;
+        buildConvertMenu(b); showMenu($('#convertMenu'), p.getBoundingClientRect());
+        break;
+      }
+      case 'convert-to': {
+        const ok = store.convertBlock(menuBlockId, p.dataset.type, p.dataset.layout);
+        hideMenus();
+        if (ok) { focusBlock(menuBlockId); showToast('已转换；原有内容都保留着，转回去即可恢复'); }
+        break;
+      }
+      case 'pick-tpl': { const bid = addBlockFromTemplate(+p.dataset.i, addMenuAfterId); hideMenus(); if (bid) focusBlock(bid); break; }
+      case 'manage-tpl': hideMenus(); openTemplates(); break;
+      case 'tpl-add': $('#tpl-rows').insertAdjacentHTML('beforeend', tplRowHTML({ title: '', en: '', layout: 'entry' })); break;
+      case 'tpl-del': p.closest('.tpl-row').remove(); break;
+      case 'tpl-reset': openTemplates(deepClone(SECTION_TEMPLATE_PRESETS)); break;
+      case 'tpl-save': saveSectionTemplates(readTemplateRows()); $('#sections-modal').hidden = true; showToast('栏目已保存'); break;
+      case 'tpl-close': $('#sections-modal').hidden = true; break;
       case 'menu-del': store.deleteBlock(menuBlockId); hideMenus(); break;
       case 'undo': store.undo(); break;
       case 'redo': store.redo(); break;
@@ -427,10 +453,64 @@ function syncLayoutUI() {
   });
 }
 function buildAddMenu() {
+  const tpls = getSectionTemplates();
   $('#addMenu').innerHTML = Object.keys(BLOCK_TYPES).map(k => {
     const t = BLOCK_TYPES[k];
     return '<div class="menu-item" data-act="pick-type" data-type="' + k + '">' + icon(t.icon) + t.label + '</div>';
-  }).join('');
+  }).join('')
+    + '<div class="menu-sep">栏目模板</div>'
+    + tpls.map((t, i) => '<div class="menu-item" data-act="pick-tpl" data-i="' + i + '">' + icon('grid') + escapeHTML(t.title) + '</div>').join('')
+    + '<div class="menu-item" data-act="manage-tpl">⚙ 管理栏目…</div>';
+}
+
+/* ---- 栏目模板：列表存浏览器（同自定义配色），没存过就用预设 ---- */
+const TPL_KEY = 'easy_cv.sectionTemplates';
+function sanitizeTemplates(arr) {
+  if (!Array.isArray(arr)) return null;
+  return arr.filter(t => t && typeof t.title === 'string' && t.title.trim())
+    .map(t => ({ title: t.title.trim(), en: typeof t.en === 'string' ? t.en.trim() : '', layout: CUSTOM_LAYOUTS[t.layout] ? t.layout : 'entry' }));
+}
+function getSectionTemplates() {
+  try { const v = sanitizeTemplates(JSON.parse(localStorage.getItem(TPL_KEY))); if (v) return v; } catch (e) { /* 忽略 */ }
+  return deepClone(SECTION_TEMPLATE_PRESETS);
+}
+function saveSectionTemplates(arr) {
+  try { localStorage.setItem(TPL_KEY, JSON.stringify(sanitizeTemplates(arr) || [])); } catch (e) { /* 忽略 */ }
+  buildAddMenu();
+}
+function addBlockFromTemplate(i, afterId) {
+  const t = getSectionTemplates()[i];
+  if (!t) return null;
+  const zh = (store.state.meta && store.state.meta.language) === 'zh';
+  return store.addBlock('custom', afterId, { title: zh || !t.en ? t.title : t.en, layout: t.layout });
+}
+function tplRowHTML(t) {
+  const opts = Object.keys(CUSTOM_LAYOUTS).map(k => '<option value="' + k + '"' + (k === t.layout ? ' selected' : '') + '>' + CUSTOM_LAYOUTS[k].replace(/（.*/, '') + '</option>').join('');
+  return '<div class="tpl-row"><input data-tpl="title" value="' + escapeHTML(t.title) + '" placeholder="如 实习经历">'
+    + '<input data-tpl="en" value="' + escapeHTML(t.en || '') + '" placeholder="如 Internships">'
+    + '<select data-tpl="layout">' + opts + '</select>'
+    + '<span class="blk-btn del" data-act="tpl-del" title="删除">✕</span></div>';
+}
+function openTemplates(list) {
+  $('#tpl-rows').innerHTML = (list || getSectionTemplates()).map(tplRowHTML).join('');
+  $('#sections-modal').hidden = false;
+}
+function readTemplateRows() {
+  return Array.from(document.querySelectorAll('#tpl-rows .tpl-row')).map(r => ({
+    title: r.querySelector('[data-tpl=title]').value, en: r.querySelector('[data-tpl=en]').value, layout: r.querySelector('[data-tpl=layout]').value
+  }));
+}
+
+/* ---- 转换块类型菜单 ---- */
+function buildConvertMenu(b) {
+  const items = Object.keys(BLOCK_TYPES).filter(k => k !== 'header' && k !== 'custom' && k !== b.type)
+    .map(k => '<div class="menu-item" data-act="convert-to" data-type="' + k + '">' + icon(BLOCK_TYPES[k].icon) + BLOCK_TYPES[k].label + '</div>');
+  const cur = b.type === 'custom' ? customLayout(b.data) : null;
+  for (const l of Object.keys(CUSTOM_LAYOUTS)) {
+    if (l === cur) continue;
+    items.push('<div class="menu-item" data-act="convert-to" data-type="custom" data-layout="' + l + '">' + icon('grid') + '自定义 · ' + CUSTOM_LAYOUTS[l].replace(/（.*/, '') + '</div>');
+  }
+  $('#convertMenu').innerHTML = items.join('');
 }
 function boot() {
   buildAddMenu();

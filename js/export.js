@@ -109,11 +109,19 @@ function printPDF() { window.print(); }
 function openSettings() {
   $('#set-datefmt').value = (store.state.meta && store.state.meta.dateFormat) || 'MMM YYYY';
   $('#set-lang').value = (store.state.meta && store.state.meta.language) === 'zh' ? 'zh' : 'en';
+  const lang = $('#set-lang').value;
+  const titles = (store.state.meta && store.state.meta.sectionTitles) || {};
+  $('#set-section-titles').innerHTML = Object.keys(SECTION_TITLES.zh).map(k =>
+    '<label for="st-' + k + '">' + BLOCK_TYPES[k].label + '</label><input id="st-' + k + '" data-section-title="' + k + '" value="' + escapeHTML(titles[k] || '') + '" placeholder="' + escapeHTML(SECTION_TITLES[lang][k]) + '">').join('');
   $('#settings-modal').hidden = false;
 }
 function saveSettings() {
   store.setDateFormat($('#set-datefmt').value);
   store.setLanguage($('#set-lang').value);
+  document.querySelectorAll('#set-section-titles [data-section-title]').forEach(el => {
+    const k = el.dataset.sectionTitle, cur = (store.state.meta.sectionTitles || {})[k] || '';
+    if (el.value.trim() !== cur) store.setSectionTitle(k, el.value);
+  });
   $('#settings-modal').hidden = true;
   showToast('设置已保存');
 }

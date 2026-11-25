@@ -4,7 +4,7 @@
 const PHOTO_MAX_EDGE = 400;                    // 最长边像素上限（30mm 宽 ≈ 339 DPI）
 const PHOTO_QUALITY = 0.85;                    // JPEG 质量
 const PHOTO_MAX_BYTES = 20 * 1024 * 1024;      // 输入文件上限 20MB，避免解码爆内存
-const PHOTO_MIME = /^data:image\/(png|jpeg|webp);base64,/;
+const PHOTO_MIME = /^data:image\/(png|jpeg|webp);base64,./;
 
 /* 只放行 canvas 产出的三种 base64 图片。
    注意：这不是 XSS 防线（<img> 加载 SVG 时脚本不执行），

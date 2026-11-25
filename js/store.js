@@ -156,6 +156,38 @@ class StateStore {
     this.commit(null, 'structure');
     return true;
   }
+  // 排版设置：拖动滑块时同一项合并为一步撤销
+  setSetting(key, value) {
+    const t = toggleDef(key);
+    if (t) {
+      // 勾选框：只收布尔；等于默认值时删除该键，导出的 JSON 只留改过的项
+      if (typeof value !== 'boolean') return false;
+      this.state.settings = this.state.settings || {};
+      if (value === t.def) delete this.state.settings[key];
+      else this.state.settings[key] = value;
+      this.commit(null, 'data');
+      return true;
+    }
+    if (isChoiceSetting(key)) {
+      // '' = 默认 / 跟随主题（删除该键）；其余必须是已知选项键
+      if (value !== '' && !choiceValue({ [key]: value }, key)) return false;
+      this.state.settings = this.state.settings || {};
+      if (value === '') delete this.state.settings[key];
+      else this.state.settings[key] = value;
+      this.commit(null, 'data');
+      return true;
+    }
+    const v = clampSetting(key, value);
+    if (v === null) return false;
+    this.state.settings = this.state.settings || {};
+    this.state.settings[key] = v;
+    this.commit('settings:' + key, 'data');
+    return true;
+  }
+  resetSettings() {
+    delete this.state.settings;
+    this.commit(null, 'data');
+  }
   applyPatch(patches) {
     try { for (const p of patches) JSONPatch.apply(this.state, p); }
     catch (err) { return { ok: false, error: String(err) }; }

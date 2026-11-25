@@ -29,11 +29,84 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `schemaVersion` | number | 固定 `1` |
-| `theme` | string | `"classic"`（衬线）/ `"modern"`（无衬线）——只决定字体 |
+| `theme` | string | `"classic"`（衬线）/ `"modern"`（无衬线）——只决定默认字体；`settings.latinFont` / `cjkFont` 设置后覆盖它 |
 | `accent` | string | 主题色，存为 `#RRGGBB`；解析器也接受 `#RGB`、`rgb(r,g,b)`（整数或百分比），统一归一化为 hex；独立于字体 |
 | `meta.dateFormat` | string | `"MMM YYYY"`（显示 `Jun 2022`）或 `"YYYY-MM"`（显示 `2022-06`） |
 | `meta.language` | string | 可选，`"en"`（默认）或 `"zh"`。决定自动小节标题：`en`→Education / Work Experience / Research Experience / Projects / Skills；`zh`→教育经历 / 工作经历 / 研究经历 / 项目 / 技能；`current=true` 的结束时间也显示「至今」（`en` 为 Present）。`custom` 块标题始终用 `title` 字段原文，不受此影响 |
+| `settings` | object | 可选，排版设置，见 §1.1。缺省或为 `{}` 时用默认排版 |
 | `blocks` | array | 块数组，见下 |
+
+### 1.1 `settings` —— 排版设置（工具栏「排版 ▾」）
+
+所有字段可选，只写想改的项，没写的用默认值。
+
+**字体**（字符串，取值必须是下表的键，否则忽略；不写 = 跟随 `theme`）
+
+| 字段 | 可选值 | 跟随主题时 |
+|---|---|---|
+| `latinFont` | `georgia` / `times` / `garamond` / `palatino` / `arial` / `calibri` / `system` | `classic`→`georgia`，`modern`→`arial` |
+| `cjkFont` | `song`（宋体）/ `hei`（黑体）/ `kai`（楷体）/ `fangsong`（仿宋） | `classic`→`song`，`modern`→`hei` |
+
+- 西文字体排在前面、中文字体排在后面：英文和数字用西文字体，汉字自动落到中文字体。
+- 只写其中一个时，另一个取当前 `theme` 的默认值。
+- 都是系统字体，每个选项列了 Windows / macOS / Linux 上的同类字体；电脑上一个都没装时浏览器会换成别的字体（例如 Garamond、Calibri 在 macOS 上通常没有）。打印出的 PDF 使用打印时那台电脑实际用到的字体。
+
+**样式**
+
+| 字段 | 类型 | 可选值 / 默认 | 作用 |
+|---|---|---|---|
+| `bulletStyle` | string | `circle` / `square` / `dash` / `arrow` / `check` / `none`；不写 = 实心圆 • | 所有要点列表的项目符号；`none` 同时取消缩进 |
+| `showContactIcons` | boolean | 默认 `true` | `false` 时联系方式与链接前不显示图标（链接仍显示文字） |
+| `accentDivider` | boolean | 默认 `false` | `true` 时小节标题下的分隔线用主题色（默认浅灰） |
+| `skillsTwoColumns` | boolean | 默认 `false` | `true` 时技能行两两并排（每个 `skills` 块是一行）；内容长的行会在半栏内折行 |
+
+- 非法取值（未知选项、非布尔）按默认处理。编辑器里改回默认值时会删掉该键，导出的 JSON 只保留改过的项。
+
+**页面**
+
+| 字段 | 类型 | 可选值 / 默认 | 作用 |
+|---|---|---|---|
+| `pageSize` | string | `letter`；不写 = A4 | 纸张尺寸（预览与打印） |
+| `pagedPreview` | boolean | 默认 `false` | 分页预览：预览按纸张分成多页显示，打印时在同样的位置强制换页 |
+| `repeatSectionTitles` | boolean | 默认 `false` | 一个小节跨页时，在下一页开头重复它的标题。**只在 `pagedPreview: true` 时生效** |
+| `showPageNumbers` | boolean | 默认 `true` | 打印页码 |
+| `pageNumberPosition` | string | `left` / `right`；不写 = 居中 | 页码位置（页面底部） |
+| `pageNumberFormat` | string | `plain`（1）/ `zh`（第 1 页）/ `zhTotal`（第 1 页 / 共 3 页）/ `en`（Page 1 of 3）；不写 = `1 / 3` | 页码格式 |
+
+- 分页预览按「纸高 − 上下页边距」逐个放置 header、小节标题、条目、技能行，会超出当前页的整块挪到下一页（打印时这些块本来就不拆开）；小节标题总是和它后面的第一块在同一页。开启后预览的页面内边距等于打印页边距。
+- 单个条目比一页还高时无法整块挪动，打印会在条目内部断开，预览不显示这种断点。
+- 页码印在下边距里，依赖浏览器对 `@page` 页边框的支持（Chrome / Edge 可以，Firefox 不打印页码）。
+
+**头部**
+
+| 字段 | 类型 | 可选值 / 默认 | 作用 |
+|---|---|---|---|
+| `headerAlign` | string | `center`；不写 = 左对齐 | 姓名、头衔、联系方式等居中。有照片时在照片左侧的区域内居中 |
+| `photoOffsetX` / `photoOffsetY` | number（mm） | −20–20，默认 0 | 照片相对原位置左右 / 上下移动，不影响其他内容的位置 |
+
+**尺寸**（数字；超出范围的值钳到边界，非数字的值忽略）
+
+| 字段 | 单位 | 范围 | 默认 | 作用 |
+|---|---|---|---|---|
+| `fontSize` | pt | 8–14 | 10.5 | 基准字号，下面的分块字号都乘以它 |
+| `lineHeight` | 倍 | 1–2 | 1.5 | 行距 |
+| `sectionSpacing` | px | 0–40 | 15 | 小节标题上方的间距 |
+| `nameScale` | × 基准 | 1–2.5 | 1.81（=19/10.5） | 姓名 |
+| `sectionTitleScale` | × 基准 | 0.8–1.6 | 1 | 小节标题 |
+| `contactScale` | × 基准 | 0.7–1.2 | 0.905（=9.5/10.5） | 联系方式、链接、自定义信息 |
+| `entryTitleScale` | × 基准 | 0.8–1.4 | 1 | 条目标题（学校 / 职位 / 项目名） |
+| `bodyScale` | × 基准 | 0.7–1.2 | 0.952（=10/10.5） | 正文：简介、描述、要点、技能行 |
+| `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | mm | 0–30 | 16 / 15 / 18 / 15 | 页边距。预览和打印 PDF 使用同一组值 |
+
+- 头衔、机构、日期、成绩、标签这些辅助文字没有单独的倍率，跟随 `fontSize` 等比缩放。
+- 页码印在下边距里；`marginBottom` 设得很小时页码可能贴边或被裁掉。
+- 只要写了任意一个 `margin*`，四边都生效（没写的边取默认值）。完全不写 `margin*` 时，预览页面内边距为 14mm 15mm、打印为 16/15/18/15mm（加入本设置前的行为）。
+- 严格 JSON Resume 格式没有排版字段，导出严格格式时 `settings` 不保留。
+- 用 JSON Patch 修改：`settings` 不存在时，先 `{"op":"add","path":"/settings","value":{}}`，再改 `/settings/<字段>`（直接改子路径会报 path not found）。
+
+```json
+"settings": { "latinFont": "times", "cjkFont": "kai", "bulletStyle": "dash", "skillsTwoColumns": true, "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
+```
 
 ## 2. 块（Block）基础结构
 
@@ -183,7 +256,7 @@
 1. **日期**一定是 `"YYYY-MM"` 字符串（如 `"2022-06"`）；`current=true` 时 `endDate` 写空字符串 `""`。
 2. `bullets` / `list` / `tags` 都是字符串数组；空就写 `[]`。
 3. `links` 必须每项有 `id`、`icon`、`url`。
-4. 布尔字段 `current`、`showLevel`、`visible` 为 `true`/`false`。
+4. 布尔字段 `current`、`visible` 为 `true`/`false`。
 5. 不要把 `custom` 的 `body` 写成 HTML——只用它的轻量标记语法。
 
 ## 5. 用 JSON Patch 修改数据（AI 编辑方式）
@@ -224,7 +297,7 @@ Patch 的**路径根是应用 JSON 对象本身**，一次提交一个 patch 数
     "value": {
       "id": "b_x1k2",
       "type": "skills",
-      "data": { "name": "Tools", "keywords": ["Git", "Docker"], "level": "", "showLevel": false },
+      "data": { "name": "Tools", "keywords": ["Git", "Docker"] },
       "visible": true
     }
   }

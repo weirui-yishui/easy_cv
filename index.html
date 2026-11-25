@@ -5,6 +5,7 @@
 <title>Easy CV</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
+<style id="cv-page-style"></style><!-- 打印页边距，由 render.js 按 state.settings 写入 -->
 </head>
 <body>
 <div id="app">
@@ -15,6 +16,7 @@
     <span class="sep"></span>
     <button class="btn" data-act="dd-theme" id="btn-theme" title="主题">主题 ▾</button>
     <button class="btn" data-act="dd-color" id="btn-color" title="配色">配色 ▾</button>
+    <button class="btn" data-act="dd-layout" id="btn-layout" title="字号、行距、页边距">排版 ▾</button>
     <button class="btn" data-act="dd-settings" id="btn-settings" title="设置">⚙ 设置</button>
     <span class="spacer"></span>
     <span class="save-target" id="save-target" title="Ctrl+S 保存位置"></span>
@@ -49,6 +51,10 @@
   </div>
   <div class="menu-item" data-act="accent-random">🎲 随机配色</div>
   <div class="color-current"><span>当前色号</span><code id="accent-current">#1a3a5c</code></div>
+</div>
+<div class="menu" id="layoutMenu" hidden>
+  <div id="layout-rows"></div>
+  <div class="layout-actions"><button class="btn small" data-act="layout-reset">恢复默认</button></div>
 </div>
 <div class="menu" id="swatchMenu" hidden>
   <div class="menu-item" data-act="swatch-edit">✎ 修改颜色</div>

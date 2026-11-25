@@ -277,9 +277,9 @@ const tests = `
   const wHdr = withPhoto.blocks.find(b => b.type === 'header');
   wHdr.data.showPhoto = true;
   wHdr.data.photo = 'data:image/jpeg;base64,/9j/4AAQ';
-  const strict = JSONResume.toStrict(withPhoto);
-  assert(strict.basics.image === 'data:image/jpeg;base64,/9j/4AAQ', 'toStrict 写入 basics.image');
-  const backHdr = JSONResume.fromStrict(strict).blocks.find(b => b.type === 'header');
+  const strictP = JSONResume.toStrict(withPhoto);
+  assert(strictP.basics.image === 'data:image/jpeg;base64,/9j/4AAQ', 'toStrict 写入 basics.image');
+  const backHdr = JSONResume.fromStrict(strictP).blocks.find(b => b.type === 'header');
   assert(backHdr.data.photo === 'data:image/jpeg;base64,/9j/4AAQ' && backHdr.data.showPhoto === true,
     '严格往返后有照片：photo / showPhoto 均不丢');
 
@@ -400,6 +400,166 @@ const tests = `
   assert(safeHtml.includes('<strong>&lt;img src=x&gt;</strong>'), '** 内的标签被转义，只有 strong 生效');
   assert(!safeHtml.includes('<img'), '不产生真实的 img 标签');
   assert(!headerRender({ data: { name: '<b>x</b>' } }, tctx).includes('<b>x</b>'), '不加 ** 时标签照旧被转义');
+
+  // 15. 排版设置（state.settings → .page 上的 CSS 变量 + 打印 @page）
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  const p15a = els['#preview-pane'].innerHTML;
+  assert(p15a.includes('style="--accent:#1f3864">'), '无 settings：.page 只有 --accent，不输出排版变量');
+  assert(els['#cv-page-style'].textContent === '', '无 settings：不覆盖默认 @page');
+
+  assert(store.setSetting('fontSize', 12) === true, 'setSetting 接受合法值');
+  assert(store.setSetting('lineHeight', '1.3') === true, 'setSetting 接受数字字符串（来自 input.value）');
+  store.setSetting('nameScale', 1.6);
+  const p15b = els['#preview-pane'].innerHTML;
+  assert(p15b.includes('--fs-base:12pt') && p15b.includes('--lh:1.3') && p15b.includes('--s-name:1.6'), '已设置项输出为 CSS 变量');
+  assert(!p15b.includes('--s-body') && !p15b.includes('--m-page'), '未设置项不输出');
+
+  assert(store.setSetting('fontSize', 99) === true && store.state.settings.fontSize === 14, '超上限钳到 max');
+  assert(store.setSetting('lineHeight', -5) === true && store.state.settings.lineHeight === 1, '低于下限钳到 min');
+  assert(store.setSetting('fontSize', 'abc') === false && store.state.settings.fontSize === 14, '非数字拒绝且不改状态');
+  assert(store.setSetting('fontSize', '') === false, '空串拒绝（清空数字框时不应变成 0）');
+  assert(store.setSetting('nope', 1) === false, '未知键拒绝');
+
+  // 拖动同一滑块合并为一步撤销
+  store.setSetting('bodyScale', 0.9); store.setSetting('bodyScale', 0.85); store.setSetting('bodyScale', 0.8);
+  store.undo();
+  assert(!('bodyScale' in store.state.settings), '同一项连续修改一次撤销');
+
+  // 页边距：设置任意一边 → 四边都输出（未设的用默认），预览 padding 与打印 @page 一致
+  store.setSetting('marginTop', 10);
+  assert(els['#preview-pane'].innerHTML.includes('--m-page:10mm 15mm 18mm 15mm'), '预览页边距四边齐全');
+  assert(els['#cv-page-style'].textContent === '@page { margin: 10mm 15mm 18mm 15mm; }', '打印 @page 同步');
+
+  // 手改 JSON / JSON Patch 塞进的非法值不会进入 style 属性
+  store.state.settings.fontSize = '12pt;background:url(x)';
+  store.state.settings.marginLeft = 'x';
+  renderPreview(store.state);
+  const p15c = els['#preview-pane'].innerHTML;
+  assert(!p15c.includes('background') && !p15c.includes('--fs-base'), '非法 fontSize 被丢弃');
+  assert(p15c.includes('--m-page:10mm 15mm 18mm 15mm'), '非法 marginLeft 回落默认值');
+
+  store.resetSettings();
+  assert(!('settings' in store.state), 'resetSettings 删除 settings');
+  assert(els['#preview-pane'].innerHTML.includes('style="--accent:#1f3864">') && els['#cv-page-style'].textContent === '', '恢复默认后输出与未设置时一致');
+  store.undo();
+  assert(store.state.settings && store.state.settings.marginTop === 10, '恢复默认可撤销');
+
+  // 默认倍率 × 基准字号 = 改动前的写死字号
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert(near(10.5 * settingValue(null, 'nameScale'), 19) && near(10.5 * settingValue(null, 'contactScale'), 9.5) && near(10.5 * settingValue(null, 'bodyScale'), 10), '默认倍率还原原字号');
+
+  // 16. 中西文字体分开选（settings.latinFont / cjkFont）
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('--body-font'), '未选字体：不输出字体变量（由 .page.classic 决定）');
+
+  assert(store.setSetting('cjkFont', 'kai') === true, '选中文字体');
+  const p16a = els['#preview-pane'].innerHTML;
+  assert(p16a.includes("--body-font:Georgia, 'Times New Roman', 'Kaiti SC'"), '只选中文：西文取主题默认 Georgia，中文用楷体');
+  assert(p16a.includes('--head-font:Georgia'), '标题字体同步');
+  assert(/, serif">/.test(p16a), '通用族跟随西文字体（衬线）');
+
+  store.setSetting('latinFont', 'arial');
+  const p16b = els['#preview-pane'].innerHTML;
+  assert(p16b.includes("--body-font:Arial, Helvetica, 'Liberation Sans', 'Kaiti SC'") && /, sans-serif">/.test(p16b), '西文 Arial + 中文楷体，通用族 sans-serif');
+  assert(!/style="[^"]*"[^>]*'Kaiti/.test(p16b) && (p16b.match(/"/g) || []).length % 2 === 0, '字体栈不破坏 style 属性引号');
+
+  store.setTheme('modern');
+  store.setSetting('latinFont', '');
+  assert(!('latinFont' in store.state.settings), "'' = 跟随主题，删除该键");
+  assert(els['#preview-pane'].innerHTML.includes("--body-font:Arial, Helvetica, 'Liberation Sans', 'Kaiti SC'"), 'modern 主题下西文跟随主题 = Arial');
+
+  assert(store.setSetting('cjkFont', 'comic') === false && store.state.settings.cjkFont === 'kai', '未知字体键拒绝且不改状态');
+  store.state.settings.latinFont = "x';background:url(y)";
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('background'), '手改 JSON 的非法字体键被忽略');
+
+  store.undo();
+  assert(store.state.settings.latinFont === 'arial', '字体修改可撤销');
+  store.resetSettings();
+  assert(!els['#preview-pane'].innerHTML.includes('--body-font'), '恢复默认后回到主题字体');
+  store.setTheme('classic');
+
+  // 17. 样式开关：项目符号 / 联系方式图标 / 主题色分隔线 / 技能双栏
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  const p17a = els['#preview-pane'].innerHTML;
+  assert(p17a.includes('<div class="page classic" style="--accent:#1f3864">'), '全默认：无额外 class、无额外变量');
+
+  assert(store.setSetting('bulletStyle', 'dash') === true, '选项目符号');
+  assert(els['#preview-pane'].innerHTML.includes("--bullet:'–  '") && !els['#preview-pane'].innerHTML.includes('--bullet-indent'), '短横：输出 --bullet，保留缩进');
+  store.setSetting('bulletStyle', 'none');
+  assert(els['#preview-pane'].innerHTML.includes('--bullet:none;--bullet-indent:0'), '无符号：取消缩进');
+  assert(store.setSetting('bulletStyle', 'star') === false && store.state.settings.bulletStyle === 'none', '未知符号拒绝');
+  store.setSetting('bulletStyle', '');
+  assert(!('bulletStyle' in store.state.settings), "'' = 默认实心圆，删除该键");
+
+  assert(store.setSetting('showContactIcons', false) === true, '关联系方式图标');
+  assert(store.state.settings.showContactIcons === false && els['#preview-pane'].innerHTML.includes('class="page classic no-contact-icons"'), '关图标 → no-contact-icons');
+  store.setSetting('showContactIcons', true);
+  assert(!('showContactIcons' in store.state.settings), '改回默认值时删除该键');
+  assert(store.setSetting('showContactIcons', 'false') === false, '勾选框只收布尔（字符串 "false" 拒绝）');
+
+  store.setSetting('accentDivider', true);
+  store.setSetting('skillsTwoColumns', true);
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic accent-divider skills-2col"'), '分隔线主题色 + 技能双栏 class');
+
+  store.state.settings.accentDivider = 'yes';   // 手改 JSON 的非布尔值
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('accent-divider'), '非布尔值按默认处理');
+
+  store.resetSettings();
+  assert(els['#preview-pane'].innerHTML.includes('<div class="page classic" style="--accent:#1f3864">'), '恢复默认后清掉所有开关');
+
+  // 18. 页面：纸张 / 页码 / 分页预览 / 头部对齐 / 照片偏移
+  store.setState(deepClone(SAMPLE));
+  assert(pageCSS(undefined) === '' && pageCSS({}) === '', '全默认：不覆盖 style.css 的 @page');
+
+  store.setSetting('pageSize', 'letter');
+  assert(els['#cv-page-style'].textContent === '@page { size: letter; }', 'Letter → @page size');
+  assert(els['#preview-pane'].innerHTML.includes('--page-w:215.9mm;--page-h:279.4mm'), 'Letter → 预览纸张尺寸');
+  assert(store.setSetting('pageSize', 'a3') === false, '未知纸张拒绝');
+  store.setSetting('pageSize', '');
+
+  store.setSetting('showPageNumbers', false);
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } }', '关页码');
+  store.setSetting('pageNumberFormat', 'zh');
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } }', '关页码时格式不生效');
+  store.setSetting('showPageNumbers', true);
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: "第 " counter(page) " 页"; color: #666; font-size: 9pt; } }', '页码格式：第 n 页（居中）');
+  store.setSetting('pageNumberPosition', 'right');
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } @bottom-right { content: "第 " counter(page) " 页"; color: #666; font-size: 9pt; } }', '页码右下：清掉居中的默认页码');
+  store.setSetting('pageNumberFormat', '');
+  assert(els['#cv-page-style'].textContent.includes('@bottom-right { content: counter(page) " / " counter(pages);'), '只改位置：格式沿用默认 1 / n');
+  store.setSetting('marginTop', 10);
+  assert(els['#cv-page-style'].textContent.startsWith('@page { margin: 10mm 15mm 18mm 15mm; @bottom-center'), '页边距与页码合并在一条 @page');
+  store.resetSettings();
+
+  // 分页预览：Node 桩里没有布局，paginatePreview 必须安全跳过；预览 padding 跟打印页边距对齐
+  assert(paginatePreview(null, {}) === 0 && paginatePreview({}, {}) === 0, '没有真实 DOM 时 paginatePreview 不抛错');
+  store.setSetting('pagedPreview', true);
+  const p18 = els['#preview-pane'].innerHTML;
+  assert(p18.includes('class="page classic paged"') && p18.includes('--m-page:16mm 15mm 18mm 15mm'), '分页预览：加 paged class，预览边距 = 打印边距');
+  store.setSetting('repeatSectionTitles', true);
+  assert(!els['#preview-pane'].innerHTML.includes('repeat'), '重复标题不加 class（只在分页时生效）');
+  store.resetSettings();
+  assert(!els['#preview-pane'].innerHTML.includes('--m-page'), '关分页预览且没设边距：不输出 --m-page');
+
+  store.setSetting('headerAlign', 'center');
+  store.setSetting('photoOffsetY', -3.5);
+  const p18b = els['#preview-pane'].innerHTML;
+  assert(p18b.includes('class="page classic header-center"') && p18b.includes('--photo-dy:-3.5mm'), '头部居中 + 照片偏移');
+  store.setSetting('photoOffsetX', -99);
+  assert(store.state.settings.photoOffsetX === -20, '照片偏移钳到 -20mm');
+  store.resetSettings();
+
+  // 面板：每个键都能生成一行，PANEL_LAYOUT 不漏项、不重复
+  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys);
+  const allKeys = LAYOUT_SETTINGS.map(d => d.key).concat(Object.keys(CHOICE_SETTINGS), TOGGLE_SETTINGS.map(t => t.key));
+  assert(panelKeys.length === new Set(panelKeys).size, '面板键不重复');
+  assert(allKeys.every(k => panelKeys.includes(k)) && panelKeys.every(k => allKeys.includes(k)), '面板覆盖全部设置项');
+  assert(panelKeys.every(k => layoutRowHTML(k).includes('data-setting="' + k + '"')), '每个设置项都生成控件');
 
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });

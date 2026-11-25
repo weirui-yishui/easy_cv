@@ -131,6 +131,8 @@ function bindEvents() {
       case 'swatch-edit': startEditSwatch(swatchMenuHex); break;
       case 'swatch-del': removeCustomColor(swatchMenuHex); hideMenus(); showToast('已删除 ' + swatchMenuHex); break;
       case 'accent-random': { const hex = randomAccent(); store.setAccent(hex); syncAccentUI(); showToast('随机配色 ' + hex); break; }
+      case 'dd-layout': syncLayoutUI(); showMenu($('#layoutMenu'), p.getBoundingClientRect()); break;
+      case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
       case 'close-settings': closeSettings(); break;
@@ -151,6 +153,14 @@ function bindEvents() {
       store.setField(id, 'photo', url);
       renderPhotoField(id);
     } catch (err) { showToast(err.message); }
+  });
+
+  // 排版面板：滑块和数字框都实时生效，并互相同步
+  $('#layoutMenu').addEventListener('input', e => {
+    const key = e.target.dataset.setting;
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (!key || !store.setSetting(key, value)) return;
+    syncLayoutUI();
   });
 
   // 配色输入框回车：编辑模式保存修改，否则应用为主题色
@@ -267,6 +277,50 @@ function addCustomColor() {
   buildColorMenu(); syncAccentUI();
   showToast('已添加 ' + hex);
 }
+/* ---- 排版面板 ---- */
+function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
+function choiceRowHTML(key) {
+  const f = CHOICE_SETTINGS[key];
+  return '<div class="layout-row"><label>' + f.label + '</label><select data-setting="' + key + '">'
+    + '<option value="">' + (f.defaultLabel || '跟随主题') + '</option>'
+    + Object.keys(f.options).map(k => '<option value="' + k + '">' + f.options[k].label + '</option>').join('')
+    + '</select></div>';
+}
+function layoutRowHTML(key) {
+  const t = toggleDef(key);
+  if (t) return '<label class="layout-check"><input type="checkbox" data-setting="' + key + '">' + t.label + '</label>';
+  if (isChoiceSetting(key)) return choiceRowHTML(key);
+  const d = layoutDef(key);
+  const attrs = ' data-setting="' + d.key + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '"';
+  return '<div class="layout-row"><label>' + d.label + '</label>'
+    + '<input type="range"' + attrs + '>'
+    + '<input type="number"' + attrs + '>'
+    + '<span class="unit">' + d.unit + '</span></div>';
+}
+function buildLayoutMenu() {
+  $('#layout-rows').innerHTML = PANEL_LAYOUT
+    .map(g => '<div class="layout-group">' + g.title + '</div>' + g.keys.map(layoutRowHTML).join(''))
+    .join('');
+}
+// 依赖其他开关才生效的项：前提没打开时置灰
+const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
+// 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
+function syncLayoutUI() {
+  const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
+  document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
+    const key = el.dataset.setting;
+    if (LAYOUT_REQUIRES[key]) el.disabled = !toggleValue(store.state.settings, LAYOUT_REQUIRES[key]);
+    if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
+    if (isChoiceSetting(key)) {
+      // 字体的「跟随主题」后面标出当前主题实际用的字体
+      if (themeFonts[key]) el.options[0].textContent = '跟随主题（' + FONT_SETTINGS[key].options[themeFonts[key]].label + '）';
+      el.value = choiceValue(store.state.settings, key) || '';
+      return;
+    }
+    if (el === document.activeElement && el.type === 'number') return;
+    el.value = fmtSetting(settingValue(store.state.settings, el.dataset.setting));
+  });
+}
 function buildAddMenu() {
   $('#addMenu').innerHTML = Object.keys(BLOCK_TYPES).map(k => {
     const t = BLOCK_TYPES[k];
@@ -276,11 +330,13 @@ function buildAddMenu() {
 function boot() {
   buildAddMenu();
   buildColorMenu();
+  buildLayoutMenu();
   refreshSaveTarget(); // 工具栏提示当前 Ctrl+S 保存位置
   store = new StateStore(loadInitial());
   store.subscribe((state, kind) => {
     renderPreview(state);
     if (kind === 'structure') renderEditor();
+    if (!$('#layoutMenu').hidden) syncLayoutUI();   // 撤销/重做时面板数值跟着变
     updateToolbar();
   });
   renderEditor();

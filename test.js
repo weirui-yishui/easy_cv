@@ -512,6 +512,55 @@ const tests = `
   store.resetSettings();
   assert(els['#preview-pane'].innerHTML.includes('<div class="page classic" style="--accent:#1f3864">'), '恢复默认后清掉所有开关');
 
+  // 18. 页面：纸张 / 页码 / 分页预览 / 头部对齐 / 照片偏移
+  store.setState(deepClone(SAMPLE));
+  assert(pageCSS(undefined) === '' && pageCSS({}) === '', '全默认：不覆盖 style.css 的 @page');
+
+  store.setSetting('pageSize', 'letter');
+  assert(els['#cv-page-style'].textContent === '@page { size: letter; }', 'Letter → @page size');
+  assert(els['#preview-pane'].innerHTML.includes('--page-w:215.9mm;--page-h:279.4mm'), 'Letter → 预览纸张尺寸');
+  assert(store.setSetting('pageSize', 'a3') === false, '未知纸张拒绝');
+  store.setSetting('pageSize', '');
+
+  store.setSetting('showPageNumbers', false);
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } }', '关页码');
+  store.setSetting('pageNumberFormat', 'zh');
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } }', '关页码时格式不生效');
+  store.setSetting('showPageNumbers', true);
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: "第 " counter(page) " 页"; color: #666; font-size: 9pt; } }', '页码格式：第 n 页（居中）');
+  store.setSetting('pageNumberPosition', 'right');
+  assert(els['#cv-page-style'].textContent === '@page { @bottom-center { content: none; } @bottom-right { content: "第 " counter(page) " 页"; color: #666; font-size: 9pt; } }', '页码右下：清掉居中的默认页码');
+  store.setSetting('pageNumberFormat', '');
+  assert(els['#cv-page-style'].textContent.includes('@bottom-right { content: counter(page) " / " counter(pages);'), '只改位置：格式沿用默认 1 / n');
+  store.setSetting('marginTop', 10);
+  assert(els['#cv-page-style'].textContent.startsWith('@page { margin: 10mm 15mm 18mm 15mm; @bottom-center'), '页边距与页码合并在一条 @page');
+  store.resetSettings();
+
+  // 分页预览：Node 桩里没有布局，paginatePreview 必须安全跳过；预览 padding 跟打印页边距对齐
+  assert(paginatePreview(null, {}) === 0 && paginatePreview({}, {}) === 0, '没有真实 DOM 时 paginatePreview 不抛错');
+  store.setSetting('pagedPreview', true);
+  const p18 = els['#preview-pane'].innerHTML;
+  assert(p18.includes('class="page classic paged"') && p18.includes('--m-page:16mm 15mm 18mm 15mm'), '分页预览：加 paged class，预览边距 = 打印边距');
+  store.setSetting('repeatSectionTitles', true);
+  assert(!els['#preview-pane'].innerHTML.includes('repeat'), '重复标题不加 class（只在分页时生效）');
+  store.resetSettings();
+  assert(!els['#preview-pane'].innerHTML.includes('--m-page'), '关分页预览且没设边距：不输出 --m-page');
+
+  store.setSetting('headerAlign', 'center');
+  store.setSetting('photoOffsetY', -3.5);
+  const p18b = els['#preview-pane'].innerHTML;
+  assert(p18b.includes('class="page classic header-center"') && p18b.includes('--photo-dy:-3.5mm'), '头部居中 + 照片偏移');
+  store.setSetting('photoOffsetX', -99);
+  assert(store.state.settings.photoOffsetX === -20, '照片偏移钳到 -20mm');
+  store.resetSettings();
+
+  // 面板：每个键都能生成一行，PANEL_LAYOUT 不漏项、不重复
+  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys);
+  const allKeys = LAYOUT_SETTINGS.map(d => d.key).concat(Object.keys(CHOICE_SETTINGS), TOGGLE_SETTINGS.map(t => t.key));
+  assert(panelKeys.length === new Set(panelKeys).size, '面板键不重复');
+  assert(allKeys.every(k => panelKeys.includes(k)) && panelKeys.every(k => allKeys.includes(k)), '面板覆盖全部设置项');
+  assert(panelKeys.every(k => layoutRowHTML(k).includes('data-setting="' + k + '"')), '每个设置项都生成控件');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

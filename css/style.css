@@ -132,7 +132,7 @@ body {
 /* ============ 预览面板 ============ */
 .preview-pane { overflow-y: auto; padding: 26px 20px; }
 .page {
-  width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff;
+  width: var(--page-w, 210mm); min-height: var(--page-h, 297mm); margin: 0 auto; background: #fff;
   box-shadow: 0 2px 14px rgba(0,0,0,.14);
   padding: var(--m-page, 14mm 15mm);   /* 设置过页边距时与打印 @page 一致 */
 }
@@ -177,6 +177,7 @@ body {
   width: 30mm; height: 40mm;    /* 3:4；A4 正文宽 180mm 的 1/6 */
   object-fit: cover;            /* 自动居中裁切，不失真 */
   border-radius: 2px;
+  position: relative; left: var(--photo-dx, 0px); top: var(--photo-dy, 0px);   /* 排版面板「照片左右/上下」，不影响其他元素位置 */
 }
 /* 占位框 = 「你忘了放照片」的报错信号，照常打印（刻意不做 @media print 隐藏） */
 .page .cv-photo-empty {
@@ -212,6 +213,18 @@ body {
 .page.no-contact-icons .cv-contact .ic, .page.no-contact-icons .cv-link .ic { display: none; }
 .page.accent-divider h2.section-title { border-bottom-color: var(--accent); }
 /* 每个技能块是一行；双栏 = 行改成半宽 inline-block，两两并排，小节标题（块级）自然断开 */
+.page.header-center .cv-header { text-align: center; }
+.page.header-center .cv-details, .page.header-center .cv-contact, .page.header-center .cv-links { justify-content: center; }
+/* ---- 分页预览（render.js 的 paginatePreview 插入 .page-gap / .page-filler） ---- */
+.page.paged { min-height: 0; }   /* 末页由 .page-filler 补齐 */
+.page-gap {
+  position: relative;
+  background: linear-gradient(#fff 0 var(--gap-a), var(--bg) var(--gap-a) var(--gap-b), #fff var(--gap-b));
+}
+.page-gap::after {
+  content: "第 " attr(data-page) " 页"; position: absolute; right: 10px; top: var(--gap-a);
+  font: 11px/18px system-ui, sans-serif; color: var(--muted);
+}
 .page.skills-2col .skill-row { display: inline-block; width: 50%; vertical-align: top; box-sizing: border-box; padding-right: 12px; }
 
 /* ============ 打印 ============ */
@@ -227,6 +240,8 @@ body {
   .app-body { display: block; }
   .preview-pane { padding: 0; overflow: visible; }
   .page { width: auto; min-height: 0; box-shadow: none; padding: 0; margin: 0; }
+  .page-gap { height: 0 !important; margin: 0 !important; background: none; break-before: page; page-break-before: always; }
+  .page-gap::after, .page-filler { display: none; }
   .page .entry, .page .skill-row, .page .cv-link, .page .ptag, .page .custom-block, .page .cv-header { break-inside: avoid; page-break-inside: avoid; }
   .page p { orphans: 3; widows: 3; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -289,6 +304,7 @@ body {
   border-radius: 6px; font: inherit; font-size: 12px;
 }
 .layout-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; cursor: pointer; }
+.layout-check:has(input:disabled) { color: var(--muted); cursor: default; }
 .layout-row .unit { flex: none; width: 24px; font-size: 12px; color: var(--muted); }
 .layout-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
 

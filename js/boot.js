@@ -286,27 +286,30 @@ function choiceRowHTML(key) {
     + Object.keys(f.options).map(k => '<option value="' + k + '">' + f.options[k].label + '</option>').join('')
     + '</select></div>';
 }
-function buildLayoutMenu() {
-  let html = '<div class="layout-group">字体</div>' + Object.keys(FONT_SETTINGS).map(choiceRowHTML).join('');
-  LAYOUT_GROUPS.forEach((g, gi) => {
-    html += '<div class="layout-group">' + g + '</div>';
-    for (const d of LAYOUT_SETTINGS.filter(x => x.group === gi)) {
-      const attrs = ' data-setting="' + d.key + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '"';
-      html += '<div class="layout-row"><label>' + d.label + '</label>'
-        + '<input type="range"' + attrs + '>'
-        + '<input type="number"' + attrs + '>'
-        + '<span class="unit">' + d.unit + '</span></div>';
-    }
-  });
-  html += '<div class="layout-group">样式</div>' + choiceRowHTML('bulletStyle')
-    + TOGGLE_SETTINGS.map(t => '<label class="layout-check"><input type="checkbox" data-setting="' + t.key + '">' + t.label + '</label>').join('');
-  $('#layout-rows').innerHTML = html;
+function layoutRowHTML(key) {
+  const t = toggleDef(key);
+  if (t) return '<label class="layout-check"><input type="checkbox" data-setting="' + key + '">' + t.label + '</label>';
+  if (isChoiceSetting(key)) return choiceRowHTML(key);
+  const d = layoutDef(key);
+  const attrs = ' data-setting="' + d.key + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '"';
+  return '<div class="layout-row"><label>' + d.label + '</label>'
+    + '<input type="range"' + attrs + '>'
+    + '<input type="number"' + attrs + '>'
+    + '<span class="unit">' + d.unit + '</span></div>';
 }
+function buildLayoutMenu() {
+  $('#layout-rows').innerHTML = PANEL_LAYOUT
+    .map(g => '<div class="layout-group">' + g.title + '</div>' + g.keys.map(layoutRowHTML).join(''))
+    .join('');
+}
+// 依赖其他开关才生效的项：前提没打开时置灰
+const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
 function syncLayoutUI() {
   const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
   document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
     const key = el.dataset.setting;
+    if (LAYOUT_REQUIRES[key]) el.disabled = !toggleValue(store.state.settings, LAYOUT_REQUIRES[key]);
     if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
     if (isChoiceSetting(key)) {
       // 字体的「跟随主题」后面标出当前主题实际用的字体

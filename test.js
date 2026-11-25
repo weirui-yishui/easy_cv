@@ -727,6 +727,21 @@ const tests = `
   store.undo();
   assert(!store.state.settings || !('fontSize' in store.state.settings), 'setSettings 一步撤销');
 
+  // 23. 头部对齐：左 / 居中 / 靠右（靠右时照片换到左上角，由 CSS 的 header-right 决定）
+  store.setState(deepClone(SAMPLE));
+  store.setSetting('headerAlign', 'right');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic header-right"'), '靠右 → header-right');
+  store.setSetting('headerAlign', 'center');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic header-center"'), '居中 → header-center');
+  assert(store.setSetting('headerAlign', 'justify') === false, '未知对齐方式拒绝');
+  store.setSetting('headerAlign', '');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic"'), '左对齐：不加 class');
+  // 照片大小 / 位置只通过 CSS 变量作用在照片上，不改头部 HTML 结构
+  const hNo = headerRender({ data: { name: 'A', showPhoto: true, photo: '' } }, tctx);
+  store.setSettings({ photoWidth: 50, photoOffsetX: 5 });
+  assert(headerRender({ data: { name: 'A', showPhoto: true, photo: '' } }, tctx) === hNo, '照片设置不影响头部 HTML');
+  store.resetSettings();
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

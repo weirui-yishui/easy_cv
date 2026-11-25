@@ -94,7 +94,7 @@ const CHOICE_SETTINGS = Object.assign({}, FONT_SETTINGS, {
     en:      { label: 'Page 1 of 3',     css: '"Page " counter(page) " of " counter(pages)' }
   } },
   marginMode: { label: '模式', defaultLabel: '每页统一', options: { perPage: { label: '每页单独（需分页预览）' } } },
-  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' } } },
+  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' }, right: { label: '靠右（照片放左上角）' } } },
   // css = 高 / 宽；照片按宽度 × 这个比例定高，object-fit: cover 居中裁切
   photoRatio: { label: '照片比例', defaultLabel: '3:4（默认）', options: {
     r57:    { label: '5:7（一寸 / 二寸照）', css: '7 / 5' },
@@ -140,7 +140,7 @@ function toggleValue(settings, key) {
 // .page 上追加的 class 串（开头带空格；全是默认时为 ''）
 function layoutClasses(settings) {
   return TOGGLE_SETTINGS.filter(t => t.cls && toggleValue(settings, t.key) !== t.def).map(t => ' ' + t.cls).join('')
-    + (choiceValue(settings, 'headerAlign') === 'center' ? ' header-center' : '')
+    + (choiceValue(settings, 'headerAlign') ? ' header-' + choiceValue(settings, 'headerAlign') : '')
     + (perPageMargins(settings) ? ' per-page' : '');
 }
 // 每页单独页边距：选了该模式且开着分页预览才生效（要靠分页才知道每页放了什么）

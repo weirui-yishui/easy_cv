@@ -213,14 +213,20 @@ body {
 .page .cv-link:hover { text-decoration: underline; }
 .page .cv-summary { margin: 9px 0 0; font-size: calc(var(--fs-base) * var(--s-body)); }
 /* ---- 照片（仅 d.showPhoto 为真时才会渲染出这些元素） ---- */
-.page .cv-header.has-photo { display: flex; gap: 8mm; align-items: flex-start; }
-.page .cv-header-main { flex: 1 1 auto; min-width: 0; } /* min-width:0 让长 URL 能换行而不撑破 flex */
+.page .cv-header.has-photo {
+  /* 照片不占排版位置：钉在头部右上角（头部靠右时在左上角），文字区固定让出 --photo-reserve，
+     所以照片大小、比例、位置怎么调，文字的位置和换行都不变。头部至少和照片一样高，下面的小节不会钻到照片底下 */
+  --photo-reserve: 38mm;   /* = 默认照片宽 30mm + 间距 8mm */
+  position: relative;
+  padding-right: var(--photo-reserve);
+  min-height: calc(var(--photo-w, 30mm) * var(--photo-hr, 4 / 3));
+}
+.page .cv-header-main { min-width: 0; }
 .page .cv-photo {
-  flex: 0 0 auto;
+  position: absolute; top: var(--photo-dy, 0px); right: calc(-1 * var(--photo-dx, 0px));   /* 排版面板「照片左右/上下」：正值向右 / 向下 */
   width: var(--photo-w, 30mm); height: calc(var(--photo-w, 30mm) * var(--photo-hr, 4 / 3));   /* 默认 30×40mm（3:4）；排版面板「头部」可改宽度和比例 */
   object-fit: cover;            /* 自动居中裁切，不失真 */
   border-radius: 2px;
-  position: relative; left: var(--photo-dx, 0px); top: var(--photo-dy, 0px);   /* 排版面板「照片左右/上下」，不影响其他元素位置 */
 }
 /* 占位框 = 「你忘了放照片」的报错信号，照常打印（刻意不做 @media print 隐藏） */
 .page .cv-photo-empty {
@@ -259,6 +265,11 @@ body {
 /* 每个技能块是一行；双栏 = 行改成半宽 inline-block，两两并排，小节标题（块级）自然断开 */
 .page.header-center .cv-header { text-align: center; }
 .page.header-center .cv-details, .page.header-center .cv-contact, .page.header-center .cv-links { justify-content: center; }
+.page.header-center .cv-header.has-photo { padding-left: var(--photo-reserve); }   /* 两侧对称让出照片位：文字以整张纸居中 */
+.page.header-right .cv-header { text-align: right; }
+.page.header-right .cv-details, .page.header-right .cv-contact, .page.header-right .cv-links { justify-content: flex-end; }
+.page.header-right .cv-header.has-photo { padding-right: 0; padding-left: var(--photo-reserve); }   /* 头部靠右：照片换到左上角 */
+.page.header-right .cv-photo { right: auto; left: var(--photo-dx, 0px); }
 /* ---- 分页预览（render.js 的 paginatePreview 插入 .page-gap / .page-filler） ---- */
 .page.paged { min-height: 0; }   /* 末页由 .page-filler 补齐 */
 /* 每页单独页边距：.pg 是一页的容器（render.js 插入），预览里的左右外边距在行内样式里；打印时清零，由 @page pN 负责 */

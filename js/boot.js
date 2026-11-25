@@ -25,7 +25,65 @@ function bindEvents() {
       case 'up': store.moveBlock(id, -1); break;
       case 'down': store.moveBlock(id, 1); break;
       case 'menu': menuBlockId = id; showMenu($('#blockMenu'), a.getBoundingClientRect()); break;
+      case 'visible': store.toggleVisible(id); break;
     }
+  });
+
+  // 拖动排序：块（抓标题栏左侧 ⋮⋮）与要点（抓行首 ⋮⋮），落点按鼠标在目标上半 / 下半决定插在前 / 后
+  let drag = null;
+  const clearDrop = () => list.querySelectorAll('.drop-before, .drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+  const dropTarget = e => {
+    if (!drag) return null;
+    const el = drag.kind === 'block' ? e.target.closest('.block-card') : e.target.closest('.bullet-row');
+    if (!el) return null;
+    if (drag.kind === 'bullet' && el.closest('.field') !== drag.field) return null;   // 要点只在本字段内移动
+    const r = el.getBoundingClientRect();
+    return { el, after: e.clientY > r.top + r.height / 2 };
+  };
+  list.addEventListener('dragstart', e => {
+    const h = e.target.closest && e.target.closest('.drag-handle');
+    if (!h) return;
+    const card = h.closest('.block-card');
+    const row = h.closest('.bullet-row');
+    drag = row
+      ? { kind: 'bullet', id: card.dataset.blockId, field: row.closest('.field'), key: row.closest('.field').dataset.key, from: +row.dataset.dragRow }
+      : { kind: 'block', id: card.dataset.blockId };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');   // Firefox 不设数据不触发拖动
+    const ghost = row || card;
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(ghost, 12, 12);
+    ghost.classList.add('dragging');
+  });
+  list.addEventListener('dragover', e => {
+    const t = dropTarget(e);
+    if (!t) return;
+    e.preventDefault();
+    clearDrop();
+    t.el.classList.add(t.after ? 'drop-after' : 'drop-before');
+  });
+  list.addEventListener('drop', e => {
+    const t = dropTarget(e);
+    clearDrop();
+    if (!t) return;
+    e.preventDefault();
+    if (drag.kind === 'block') {
+      const to = store.state.blocks.findIndex(b => b.id === t.el.dataset.blockId) + (t.after ? 1 : 0);
+      store.moveBlockTo(drag.id, to);
+    } else {
+      moveBullet(drag.id, drag.key, drag.from, +t.el.dataset.dragRow + (t.after ? 1 : 0));
+    }
+  });
+  list.addEventListener('dragend', () => {
+    clearDrop();
+    list.querySelectorAll('.dragging').forEach(x => x.classList.remove('dragging'));
+    drag = null;
+  });
+
+  // 点预览里的条目 → 左侧跳到对应块（可在缩放条关掉）；点链接时不跳
+  $('#preview-pane').addEventListener('click', e => {
+    if (!previewJumpOn() || e.target.closest('a')) return;
+    const el = e.target.closest('[data-bid]');
+    if (el) jumpToBlock(el.dataset.bid);
   });
 
   // 文本输入 → 更新状态（预览即时刷新，编辑器不重建以保留焦点）
@@ -135,6 +193,7 @@ function bindEvents() {
       case 'zoom-in': stepZoom(1); break;
       case 'zoom-out': stepZoom(-1); break;
       case 'zoom-fit': setZoomPref('fit'); break;
+      case 'toggle-jump': setPreviewJump(!previewJumpOn()); break;
       case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
@@ -185,6 +244,7 @@ function bindEvents() {
     if (mod && !e.shiftKey && k === 'z') { e.preventDefault(); store.undo(); }
     else if (mod && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); store.redo(); }
     else if (mod && !e.shiftKey && k === 's') { e.preventDefault(); saveJSONFile(); }
+    else if (mod && !e.shiftKey && !e.altKey && k === 'b' && isBoldTarget(e.target)) { e.preventDefault(); applyBold(e.target); }
   });
 
 }
@@ -280,6 +340,31 @@ function addCustomColor() {
   buildColorMenu(); syncAccentUI();
   showToast('已添加 ' + hex);
 }
+/* ---- Ctrl/⌘+B 加粗：只作用于编辑器里的文本框 ---- */
+function isBoldTarget(el) {
+  return !!el && !!el.closest && !!el.closest('#block-list')
+    && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text'));
+}
+function applyBold(el) {
+  const r = toggleBoldMarkup(el.value, el.selectionStart, el.selectionEnd);
+  el.value = r.value;
+  el.setSelectionRange(r.start, r.end);
+  el.dispatchEvent(new Event('input', { bubbles: true }));   // 走原有的 input 处理，写回状态、可撤销
+}
+
+/* ---- 点预览定位开关（界面偏好，存浏览器） ---- */
+const JUMP_KEY = 'easy_cv.previewJump';
+function previewJumpOn() { try { return localStorage.getItem(JUMP_KEY) !== 'off'; } catch (e) { return true; } }
+function setPreviewJump(on) {
+  try { localStorage.setItem(JUMP_KEY, on ? 'on' : 'off'); } catch (e) { /* 忽略 */ }
+  applyPreviewJump();
+}
+function applyPreviewJump() {
+  const on = previewJumpOn();
+  const pane = $('#preview-pane'); if (pane && pane.classList) pane.classList.toggle('jump-on', on);
+  const btn = $('#btn-jump'); if (btn && btn.classList) btn.classList.toggle('active', on);
+}
+
 /* ---- 排版面板（右侧，可收起；开合状态存浏览器） ---- */
 const LAYOUT_PANE_KEY = 'easy_cv.layoutPane';
 function layoutPaneOpen() {
@@ -364,6 +449,7 @@ function boot() {
   updateToolbar();
   bindEvents();
   applyLayoutPane();
+  applyPreviewJump();
   window.addEventListener('resize', debounce(applyZoom, 100));
 }
 

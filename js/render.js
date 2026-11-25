@@ -22,7 +22,8 @@ function renderSequence(blocks, ctx) {
     } else {
       lastCustomTitle = null;
     }
-    html += t.renderHTML(b, ctx);
+    // 给块的最外层元素打上 data-bid，点预览时据此定位到左侧编辑卡片
+    html += t.renderHTML(b, ctx).replace(/^<([a-z0-9]+)/i, '<$1 data-bid="' + escapeHTML(b.id) + '"');
     lastType = b.type;
   }
   return html;

@@ -119,6 +119,22 @@ class StateStore {
     this.state.blocks.splice(j, 0, b);
     this.commit(null, 'structure');
   }
+  // 拖动排序：把块移到 toIndex（按移除该块之前的下标计算插入点）
+  moveBlockTo(id, toIndex) {
+    const i = this.state.blocks.findIndex(b => b.id === id);
+    if (i < 0) return;
+    const j = Math.max(0, Math.min(this.state.blocks.length, toIndex)) - (toIndex > i ? 1 : 0);
+    if (j === i) return;
+    const [b] = this.state.blocks.splice(i, 1);
+    this.state.blocks.splice(j, 0, b);
+    this.commit(null, 'structure');
+  }
+  toggleVisible(id) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b) return;
+    b.visible = b.visible === false;
+    this.commit(null, 'structure');
+  }
   duplicateBlock(id) {
     const i = this.state.blocks.findIndex(b => b.id === id);
     if (i < 0) return null;

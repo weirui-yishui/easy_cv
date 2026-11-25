@@ -57,7 +57,20 @@ body {
   padding: 6px 12px; font-size: 12px; color: var(--muted); flex: 0 0 auto;
 }
 #zoom-label { min-width: 40px; text-align: center; }
-#zoom-fit.active { border-color: var(--accent); color: var(--accent); }
+#zoom-fit.active, #btn-jump.active { border-color: var(--accent); color: var(--accent); }
+.preview-pane.jump-on .page [data-bid] { cursor: pointer; }
+.preview-pane.jump-on .page [data-bid]:hover { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+
+/* ---- 拖动排序 / 隐藏的块 ---- */
+.drag-handle { cursor: grab; color: #b3b9c2; font-size: 12px; letter-spacing: -2px; padding: 0 2px; user-select: none; flex: 0 0 auto; }
+.drag-handle:hover { color: var(--text); }
+.block-card.dragging, .bullet-row.dragging { opacity: .45; }
+.block-card.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.block-card.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.bullet-row.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.bullet-row.drop-after { box-shadow: 0 2px 0 var(--accent); }
+.block-card.is-hidden .block-head > :not([data-action="visible"]) { opacity: .45; }
+.block-card.is-hidden .block-head .type { text-decoration: line-through; }
 /* 缩放用 transform：只改显示，不改排版，所以分页测量和打印都按 100% 的版面算；
    .page-zoom 按缩放后的尺寸占位，滚动范围才对 */
 .page-zoom { margin: 0 auto; }
@@ -134,7 +147,9 @@ body {
 .detail-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 6px; align-items: center; } /* 首列 110px 对齐 link-row 的 select */
 .detail-row input { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 .bullets { display: flex; flex-direction: column; gap: 8px; }
-.bullet-row { position: relative; }
+.bullet-row { position: relative; display: flex; align-items: flex-start; gap: 2px; }
+.bullet-row .drag-handle { padding-top: 7px; }
+.bullet-row textarea { flex: 1 1 auto; min-width: 0; }
 .bullet-row textarea { padding-right: 30px; } /* 继承 .field textarea 样式（个人简介同款），预留 ✕ 空间 */
 .bullet-row .del { position: absolute; top: 6px; right: 6px; }
 

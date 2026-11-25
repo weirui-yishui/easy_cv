@@ -3,7 +3,7 @@
 
 /* ---- 表单字段渲染 ---- */
 function bulletRowHTML(val, i) {
-  return '<div class="bullet-row"><textarea data-bl="' + i + '" placeholder="项目符号内容">' + escapeHTML(val || '') + '</textarea><span class="blk-btn del" data-act="rmbullet" data-i="' + i + '" title="删除">✕</span></div>';
+  return '<div class="bullet-row" data-drag-row="' + i + '"><span class="drag-handle" draggable="true" title="拖动排序">⋮⋮</span><textarea data-bl="' + i + '" placeholder="项目符号内容">' + escapeHTML(val || '') + '</textarea><span class="blk-btn del" data-act="rmbullet" data-i="' + i + '" title="删除">✕</span></div>';
 }
 function linkRowHTML(l, i) {
   const opts = Object.keys(ICONS).map(k =>
@@ -89,12 +89,15 @@ function blockCardHTML(b) {
   const label = t ? t.label : b.type;
   const iconName = t ? t.icon : 'grid';
   const sum = blockSummary(b);
-  return '<div class="block-card' + (b.collapsed ? ' collapsed' : '') + '" data-block-id="' + b.id + '">'
+  const hidden = b.visible === false;
+  return '<div class="block-card' + (b.collapsed ? ' collapsed' : '') + (hidden ? ' is-hidden' : '') + '" data-block-id="' + escapeHTML(b.id) + '">'
     + '<div class="block-head" data-action="toggle">'
+    + '<span class="drag-handle" draggable="true" title="拖动排序">⋮⋮</span>'
     + icon(iconName, 'blk-icon')
     + '<span class="type">' + escapeHTML(label) + '</span>'
     + (sum ? '<span class="meta">' + escapeHTML(sum) + '</span>' : '')
     + '<span class="spacer"></span>'
+    + '<span class="blk-btn" data-action="visible" title="' + (hidden ? '已隐藏：预览和打印中不显示，点击显示' : '在预览和打印中隐藏') + '">' + (hidden ? '◌' : '◉') + '</span>'
     + '<span class="blk-btn" data-action="up" title="上移">↑</span>'
     + '<span class="blk-btn" data-action="down" title="下移">↓</span>'
     + '<span class="blk-btn" data-action="menu" title="更多">⋯</span>'
@@ -110,6 +113,17 @@ function renderEditor() {
   }
   list.innerHTML = store.state.blocks.map(blockCardHTML).join('');
 }
+// 点预览跳到左侧：折叠着就展开，滚到可见并闪一下；不抢输入焦点
+function jumpToBlock(id) {
+  const b = store.state.blocks.find(x => x.id === id);
+  if (!b) return;
+  if (b.collapsed) store.toggleCollapsed(id);   // 'structure' 事件会重建编辑器
+  const card = document.querySelector('.block-card[data-block-id="' + cssEscapeAttr(id) + '"]');
+  if (!card) return;
+  card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  card.classList.remove('hl'); void card.offsetWidth; card.classList.add('hl');
+}
+function cssEscapeAttr(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 function focusBlock(id) {
   const card = document.querySelector('.block-card[data-block-id="' + id + '"]');
   if (!card) return;
@@ -236,6 +250,18 @@ function addBullet(id, key) {
   const b = store.state.blocks.find(x => x.id === id);
   if (!b) return;
   const arr = [...(b.data[key] || []), ''];
+  store.setField(id, key, arr);
+  renderBulletRows(id, key);
+}
+function moveBullet(id, key, from, to) {
+  const b = store.state.blocks.find(x => x.id === id);
+  if (!b) return;
+  const arr = [...(b.data[key] || [])];
+  if (from < 0 || from >= arr.length) return;
+  const j = Math.max(0, Math.min(arr.length, to)) - (to > from ? 1 : 0);
+  if (j === from) return;
+  const [x] = arr.splice(from, 1);
+  arr.splice(j, 0, x);
   store.setField(id, key, arr);
   renderBulletRows(id, key);
 }

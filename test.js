@@ -561,6 +561,47 @@ const tests = `
   assert(allKeys.every(k => panelKeys.includes(k)) && panelKeys.every(k => allKeys.includes(k)), '面板覆盖全部设置项');
   assert(panelKeys.every(k => layoutRowHTML(k).includes('data-setting="' + k + '"')), '每个设置项都生成控件');
 
+  // 19. 编辑器：Ctrl+B 加粗 / 拖动排序 / 显示隐藏 / 预览定位标记
+  const tb = (v, a, b) => JSON.stringify(toggleBoldMarkup(v, a, b));
+  assert(tb('abc def', 4, 7) === JSON.stringify({ value: 'abc **def**', start: 6, end: 9 }), '选中文字 → 加 **，选区仍框住原文字');
+  assert(tb('abc **def**', 6, 9) === JSON.stringify({ value: 'abc def', start: 4, end: 7 }), '选区两侧是 ** → 去掉');
+  assert(tb('abc **def**', 4, 11) === JSON.stringify({ value: 'abc def', start: 4, end: 7 }), '选区连 ** 一起选中 → 去掉');
+  assert(tb('ab', 1, 1) === JSON.stringify({ value: 'a****b', start: 3, end: 3 }), '无选区 → 插入 **** 光标居中');
+  assert(tb('**', 0, 2) === JSON.stringify({ value: '******', start: 2, end: 4 }), '只选中两个星号不算已加粗，照常包一层');
+  assert(tb('x', 0, 1) === JSON.stringify({ value: '**x**', start: 2, end: 3 }), '选区在开头（前面不足两个字符）也正常');
+
+  store.setState(deepClone(SAMPLE));
+  const ids0 = store.state.blocks.map(b => b.id);
+  store.moveBlockTo(ids0[0], 3);
+  assert(store.state.blocks.map(b => b.id).join() === [ids0[1], ids0[2], ids0[0], ...ids0.slice(3)].join(), 'moveBlockTo 下移：插到原第 3 个之前');
+  store.moveBlockTo(ids0[0], 0);
+  assert(store.state.blocks.map(b => b.id).join() === ids0.join(), 'moveBlockTo 移回顶部');
+  store.moveBlockTo(ids0[1], store.state.blocks.length);
+  assert(store.state.blocks[store.state.blocks.length - 1].id === ids0[1], 'moveBlockTo 移到末尾');
+  store.undo();
+  assert(store.state.blocks.map(b => b.id).join() === ids0.join(), '拖动排序可撤销');
+
+  const rid = store.state.blocks.find(b => b.type === 'research').id;
+  store.setField(rid, 'highlights', ['a', 'b', 'c']);
+  moveBullet(rid, 'highlights', 0, 3);
+  assert(store.state.blocks.find(b => b.id === rid).data.highlights.join() === 'b,c,a', '要点拖到末尾');
+  moveBullet(rid, 'highlights', 2, 0);
+  assert(store.state.blocks.find(b => b.id === rid).data.highlights.join() === 'a,b,c', '要点拖到开头');
+
+  store.toggleVisible(rid);
+  assert(store.state.blocks.find(b => b.id === rid).visible === false, '隐藏块');
+  assert(!els['#preview-pane'].innerHTML.includes('data-bid="' + rid + '"'), '隐藏的块不出现在预览');
+  assert(blockCardHTML(store.state.blocks.find(b => b.id === rid)).includes('is-hidden'), '编辑器里标出已隐藏');
+  store.toggleVisible(rid);
+  assert(store.state.blocks.find(b => b.id === rid).visible === true, '重新显示');
+
+  renderPreview(store.state);
+  const p19 = els['#preview-pane'].innerHTML;
+  assert(store.state.blocks.every(b => p19.includes('data-bid="' + b.id + '"')), '每个块的预览元素都带 data-bid');
+  assert(p19.includes('<header data-bid="' + store.state.blocks[0].id + '" class="cv-header">'), 'data-bid 加在块最外层元素上');
+  const evilId = { id: 'x" onclick="alert(1)', type: 'skills', data: { name: 'S', keywords: [] }, visible: true };
+  assert(!renderSequence([evilId], tctx).includes('onclick="alert'), '块 id 被转义，不能注入属性');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;

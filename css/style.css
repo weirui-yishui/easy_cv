@@ -46,7 +46,32 @@ body {
 .btn:disabled { opacity: .4; cursor: default; }
 
 /* ============ 主布局 ============ */
-.app-body { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+.app-body { flex: 1; display: grid; grid-template-columns: 360px minmax(0, 1fr) 300px; min-height: 0; }
+.app-body.layout-collapsed { grid-template-columns: 360px minmax(0, 1fr) 0; }
+.app-body.layout-collapsed .layout-pane { display: none; }
+
+/* ============ 预览区：缩放条 + 纸张 ============ */
+.preview-wrap { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.zoom-bar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 6px 12px; font-size: 12px; color: var(--muted); flex: 0 0 auto;
+}
+#zoom-label { min-width: 40px; text-align: center; }
+#zoom-fit.active { border-color: var(--accent); color: var(--accent); }
+/* 缩放用 transform：只改显示，不改排版，所以分页测量和打印都按 100% 的版面算；
+   .page-zoom 按缩放后的尺寸占位，滚动范围才对 */
+.page-zoom { margin: 0 auto; }
+.page-zoom > .page { transform-origin: top left; }
+
+/* ============ 右侧排版面板 ============ */
+.layout-pane {
+  border-left: 1px solid var(--border); background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.layout-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 4px; }
+.layout-head .pane-title { margin: 0; }
+.layout-scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 12px 12px; }
+#btn-layout.active { border-color: var(--accent); color: var(--accent); }
 
 /* ============ 编辑器面板 ============ */
 .editor-pane {
@@ -130,7 +155,7 @@ body {
 .add-block-btn:hover { filter: brightness(1.12); }
 
 /* ============ 预览面板 ============ */
-.preview-pane { overflow-y: auto; padding: 26px 20px; }
+.preview-pane { flex: 1 1 auto; overflow: auto; padding: 0 20px 26px; }
 .page {
   width: var(--page-w, 210mm); min-height: var(--page-h, 297mm); margin: 0 auto; background: #fff;
   box-shadow: 0 2px 14px rgba(0,0,0,.14);
@@ -239,6 +264,10 @@ body {
   #app { height: auto; }
   .app-body { display: block; }
   .preview-pane { padding: 0; overflow: visible; }
+  .zoom-bar, .layout-pane { display: none !important; }
+  .preview-wrap { display: block; }
+  .page-zoom { width: auto !important; height: auto !important; }
+  .page-zoom > .page { transform: none !important; }
   .page { width: auto; min-height: 0; box-shadow: none; padding: 0; margin: 0; }
   .page-gap { height: 0 !important; margin: 0 !important; background: none; break-before: page; page-break-before: always; }
   .page-gap::after, .page-filler { display: none; }
@@ -290,7 +319,6 @@ body {
 .color-current code { font-family: ui-monospace, Consolas, monospace; color: var(--text); }
 
 /* ============ 排版面板 ============ */
-#layoutMenu { width: 300px; max-height: 80vh; overflow-y: auto; padding: 6px 12px 10px; }
 .layout-group { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .layout-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
 .layout-row > label { flex: 0 0 64px; }

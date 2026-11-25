@@ -131,7 +131,10 @@ function bindEvents() {
       case 'swatch-edit': startEditSwatch(swatchMenuHex); break;
       case 'swatch-del': removeCustomColor(swatchMenuHex); hideMenus(); showToast('已删除 ' + swatchMenuHex); break;
       case 'accent-random': { const hex = randomAccent(); store.setAccent(hex); syncAccentUI(); showToast('随机配色 ' + hex); break; }
-      case 'dd-layout': syncLayoutUI(); showMenu($('#layoutMenu'), p.getBoundingClientRect()); break;
+      case 'toggle-layout': setLayoutPaneOpen(!layoutPaneOpen()); break;
+      case 'zoom-in': stepZoom(1); break;
+      case 'zoom-out': stepZoom(-1); break;
+      case 'zoom-fit': setZoomPref('fit'); break;
       case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
@@ -156,7 +159,7 @@ function bindEvents() {
   });
 
   // 排版面板：滑块和数字框都实时生效，并互相同步
-  $('#layoutMenu').addEventListener('input', e => {
+  $('#layout-pane').addEventListener('input', e => {
     const key = e.target.dataset.setting;
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (!key || !store.setSetting(key, value)) return;
@@ -277,7 +280,24 @@ function addCustomColor() {
   buildColorMenu(); syncAccentUI();
   showToast('已添加 ' + hex);
 }
-/* ---- 排版面板 ---- */
+/* ---- 排版面板（右侧，可收起；开合状态存浏览器） ---- */
+const LAYOUT_PANE_KEY = 'easy_cv.layoutPane';
+function layoutPaneOpen() {
+  try { return localStorage.getItem(LAYOUT_PANE_KEY) !== 'closed'; } catch (e) { return true; }
+}
+function setLayoutPaneOpen(open) {
+  try { localStorage.setItem(LAYOUT_PANE_KEY, open ? 'open' : 'closed'); } catch (e) { /* 忽略 */ }
+  applyLayoutPane();
+}
+function applyLayoutPane() {
+  const open = layoutPaneOpen();
+  const body = document.querySelector('.app-body');
+  if (body && body.classList) body.classList.toggle('layout-collapsed', !open);
+  const btn = $('#btn-layout');
+  if (btn && btn.classList) btn.classList.toggle('active', open);
+  if (open) syncLayoutUI();
+  applyZoom();   // 面板开合改变预览区宽度，「适应宽度」要重算
+}
 function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
 function choiceRowHTML(key) {
   const f = CHOICE_SETTINGS[key];
@@ -307,7 +327,7 @@ const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', pageNumberPositio
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
 function syncLayoutUI() {
   const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
-  document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
+  document.querySelectorAll('#layout-pane [data-setting]').forEach(el => {
     const key = el.dataset.setting;
     if (LAYOUT_REQUIRES[key]) el.disabled = !toggleValue(store.state.settings, LAYOUT_REQUIRES[key]);
     if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
@@ -336,13 +356,15 @@ function boot() {
   store.subscribe((state, kind) => {
     renderPreview(state);
     if (kind === 'structure') renderEditor();
-    if (!$('#layoutMenu').hidden) syncLayoutUI();   // 撤销/重做时面板数值跟着变
+    if (layoutPaneOpen()) syncLayoutUI();   // 撤销/重做时面板数值跟着变
     updateToolbar();
   });
   renderEditor();
   renderPreview(store.state);
   updateToolbar();
   bindEvents();
+  applyLayoutPane();
+  window.addEventListener('resize', debounce(applyZoom, 100));
 }
 
 boot();

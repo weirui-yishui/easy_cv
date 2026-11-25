@@ -45,11 +45,45 @@ function renderPreview(state) {
   };
   const accent = normalizeAccent(state.accent);
   const vars = layoutStyleVars(state.settings, themeKey);
-  $('#preview-pane').innerHTML = '<div class="page ' + themeKey + layoutClasses(state.settings) + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div>';
+  $('#preview-pane').innerHTML = '<div class="page-zoom"><div class="page ' + themeKey + layoutClasses(state.settings) + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div></div>';
   // 纸张 / 页边距 / 页码：@page 不能用 CSS 变量，改写 <head> 里的专用 <style>
   const pageStyle = $('#cv-page-style');
   if (pageStyle) pageStyle.textContent = pageCSS(state.settings);
   if (toggleValue(state.settings, 'pagedPreview')) paginatePreview($('#preview-pane').querySelector('.page'), state.settings);
+  applyZoom();
+}
+
+/* ---- 预览缩放（界面偏好，存浏览器，不进简历 JSON） ----
+ * 'fit' = 按预览区宽度缩放，最大 100%；数字 = 固定比例。
+ * 用 transform 只缩放显示，排版仍按 100% 进行：分页测量在缩放前完成，打印时去掉 transform。 */
+const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
+const ZOOM_KEY = 'easy_cv.zoom';
+function getZoomPref() {
+  try { const v = localStorage.getItem(ZOOM_KEY); if (v === 'fit' || ZOOM_STEPS.includes(Number(v))) return v === 'fit' ? 'fit' : Number(v); } catch (e) { /* 忽略 */ }
+  return 'fit';
+}
+function setZoomPref(v) { try { localStorage.setItem(ZOOM_KEY, String(v)); } catch (e) { /* 忽略 */ } applyZoom(); }
+function stepZoom(dir) {
+  const cur = currentZoom();
+  const next = dir > 0 ? ZOOM_STEPS.find(z => z > cur + 0.001) : [...ZOOM_STEPS].reverse().find(z => z < cur - 0.001);
+  if (next) setZoomPref(next);
+}
+let lastZoom = 1;
+function currentZoom() { return lastZoom; }
+function applyZoom() {
+  const pane = $('#preview-pane');
+  const wrap = pane && pane.querySelector && pane.querySelector('.page-zoom');
+  const page = wrap && wrap.querySelector && wrap.querySelector('.page');
+  if (!page || !page.offsetWidth) return;   // Node 桩 / 尚未布局
+  const pref = getZoomPref();
+  const avail = pane.clientWidth - 40;      // 减去左右 padding
+  const z = pref === 'fit' ? Math.min(1, avail / page.offsetWidth) : pref;
+  lastZoom = z;
+  page.style.transform = z === 1 ? '' : 'scale(' + z + ')';
+  wrap.style.width = page.offsetWidth * z + 'px';
+  wrap.style.height = page.offsetHeight * z + 'px';
+  const label = $('#zoom-label'); if (label) label.textContent = Math.round(z * 100) + '%';
+  const fit = $('#zoom-fit'); if (fit && fit.classList) fit.classList.toggle('active', pref === 'fit');
 }
 
 /* ---- 分页预览 ----

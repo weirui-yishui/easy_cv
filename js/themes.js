@@ -35,6 +35,7 @@ const LAYOUT_SETTINGS = [
   { key: 'marginRight',       label: '右',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 15 },
   { key: 'marginBottom',      label: '下',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 18 },
   { key: 'marginLeft',        label: '左',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 15 },
+  { key: 'photoWidth',        label: '照片宽度', unit: 'mm', min: 15,  max: 60,  step: 1,    def: 30,        cssVar: '--photo-w',     css: v => v + 'mm' },
   { key: 'photoOffsetX',      label: '照片左右', unit: 'mm', min: -20, max: 20,  step: 0.5,  def: 0,         cssVar: '--photo-dx',    css: v => v + 'mm' },
   { key: 'photoOffsetY',      label: '照片上下', unit: 'mm', min: -20, max: 20,  step: 0.5,  def: 0,         cssVar: '--photo-dy',    css: v => v + 'mm' }
 ];
@@ -92,7 +93,14 @@ const CHOICE_SETTINGS = Object.assign({}, FONT_SETTINGS, {
     zhTotal: { label: '第 1 页 / 共 3 页', css: '"第 " counter(page) " 页 / 共 " counter(pages) " 页"' },
     en:      { label: 'Page 1 of 3',     css: '"Page " counter(page) " of " counter(pages)' }
   } },
-  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' } } }
+  marginMode: { label: '模式', defaultLabel: '每页统一', options: { perPage: { label: '每页单独（需分页预览）' } } },
+  headerAlign: { label: '头部对齐', defaultLabel: '左对齐', options: { center: { label: '居中' }, right: { label: '靠右（照片放左上角）' } } },
+  // css = 高 / 宽；照片按宽度 × 这个比例定高，object-fit: cover 居中裁切
+  photoRatio: { label: '照片比例', defaultLabel: '3:4（默认）', options: {
+    r57:    { label: '5:7（一寸 / 二寸照）', css: '7 / 5' },
+    r23:    { label: '2:3',                css: '3 / 2' },
+    square: { label: '1:1',                css: '1' }
+  } }
 });
 const PAGE_SIZES = { a4: { w: 210, h: 297, css: 'A4' }, letter: { w: 215.9, h: 279.4, css: 'letter' } };
 const DEFAULT_PAGE_NUMBER_CSS = 'counter(page) " / " counter(pages)';   // 与 style.css 的默认 @page 一致
@@ -111,9 +119,9 @@ const PANEL_LAYOUT = [
   { title: '字体',                  keys: ['latinFont', 'cjkFont'] },
   { title: '字号与行距',            keys: ['fontSize', 'lineHeight', 'sectionSpacing'] },
   { title: '分块字号（× 基准字号）', keys: ['nameScale', 'sectionTitleScale', 'contactScale', 'entryTitleScale', 'bodyScale'] },
-  { title: '页边距',                keys: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'] },
-  { title: '页面',                  keys: ['pageSize', 'pagedPreview', 'repeatSectionTitles', 'showPageNumbers', 'pageNumberPosition', 'pageNumberFormat'] },
-  { title: '头部',                  keys: ['headerAlign', 'photoOffsetX', 'photoOffsetY'] },
+  { title: '页边距',                keys: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'marginMode', '@pageMargins'] },
+  { title: '页面',                  keys: ['pageSize', 'pagedPreview', 'repeatSectionTitles', 'showPageNumbers', 'pageNumberPosition', 'pageNumberFormat', '@fitPages'] },
+  { title: '头部',                  keys: ['headerAlign', 'photoWidth', 'photoRatio', 'photoOffsetX', 'photoOffsetY'] },
   { title: '样式',                  keys: ['bulletStyle', 'showContactIcons', 'accentDivider', 'skillsTwoColumns'] }
 ];
 const hasOwnKey = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -132,7 +140,34 @@ function toggleValue(settings, key) {
 // .page 上追加的 class 串（开头带空格；全是默认时为 ''）
 function layoutClasses(settings) {
   return TOGGLE_SETTINGS.filter(t => t.cls && toggleValue(settings, t.key) !== t.def).map(t => ' ' + t.cls).join('')
-    + (choiceValue(settings, 'headerAlign') === 'center' ? ' header-center' : '');
+    + (choiceValue(settings, 'headerAlign') ? ' header-' + choiceValue(settings, 'headerAlign') : '')
+    + (perPageMargins(settings) ? ' per-page' : '');
+}
+// 每页单独页边距：选了该模式且开着分页预览才生效（要靠分页才知道每页放了什么）
+function perPageMargins(settings) {
+  return choiceValue(settings, 'marginMode') === 'perPage' && toggleValue(settings, 'pagedPreview');
+}
+const MAX_PAGES = 30;
+// 第 n 页的四边页边距（mm）。n 为空或未开每页单独 → 统一值；settings.pageMargins[n] 里设过的边覆盖统一值
+function pageMarginsFor(settings, n) {
+  const m = {};
+  for (const k of MARGIN_KEYS) m[k] = settingValue(settings, k);
+  const pm = settings && settings.pageMargins;
+  if (n && perPageMargins(settings) && pm && typeof pm === 'object') {
+    const o = pm[n];
+    if (o && typeof o === 'object') for (const k of MARGIN_KEYS) { const v = clampSetting(k, o[k]); if (v !== null) m[k] = v; }
+  }
+  return m;
+}
+// 打印用具名页面：每页一条 @page pN（只在每页单独模式下由分页预览输出）
+function namedPagesCSS(settings, pageCount) {
+  if (!perPageMargins(settings)) return '';
+  let css = '';
+  for (let n = 1; n <= pageCount; n++) {
+    const m = pageMarginsFor(settings, n);
+    css += '@page p' + n + ' { margin: ' + MARGIN_KEYS.map(k => m[k] + 'mm').join(' ') + '; } ';
+  }
+  return css.trim();
 }
 // 两项都没设置 → ''（交给 .page.classic / .page.modern 的 CSS）；设置了任一项 → 另一项取主题默认
 function fontFamilyCSS(settings, themeKey) {
@@ -166,6 +201,8 @@ function layoutStyleVars(settings, themeKey) {
   if (!settings) return s;
   const ff = fontFamilyCSS(settings, themeKey);
   if (ff) s += ';--body-font:' + ff + ';--head-font:' + ff;
+  const ratio = choiceValue(settings, 'photoRatio');
+  if (ratio) s += ';--photo-hr:' + CHOICE_SETTINGS.photoRatio.options[ratio].css;
   const bullet = choiceValue(settings, 'bulletStyle');
   if (bullet) s += ';--bullet:' + BULLET_STYLES[bullet].css + (bullet === 'none' ? ';--bullet-indent:0' : '');
   for (const d of LAYOUT_SETTINGS) {

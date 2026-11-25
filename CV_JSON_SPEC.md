@@ -31,12 +31,13 @@
 | `schemaVersion` | number | 固定 `1` |
 | `theme` | string | `"classic"`（衬线）/ `"modern"`（无衬线）——只决定默认字体；`settings.latinFont` / `cjkFont` 设置后覆盖它 |
 | `accent` | string | 主题色，存为 `#RRGGBB`；解析器也接受 `#RGB`、`rgb(r,g,b)`（整数或百分比），统一归一化为 hex；独立于字体 |
-| `meta.dateFormat` | string | `"MMM YYYY"`（显示 `Jun 2022`）或 `"YYYY-MM"`（显示 `2022-06`） |
-| `meta.language` | string | 可选，`"en"`（默认）或 `"zh"`。决定自动小节标题：`en`→Education / Work Experience / Research Experience / Projects / Skills；`zh`→教育经历 / 工作经历 / 研究经历 / 项目 / 技能；`current=true` 的结束时间也显示「至今」（`en` 为 Present）。`custom` 块标题始终用 `title` 字段原文，不受此影响 |
+| `meta.dateFormat` | string | `"MMM YYYY"`（显示 `Jun 2022`）、`"YYYY-MM"`（`2022-06`）、`"YYYY.MM"`（`2022.06`）或 `"YYYY年M月"`（`2022年6月`） |
+| `meta.language` | string | 可选，`"en"`（默认）或 `"zh"`。决定自动小节标题：`en`→Education / Work Experience / Research Experience / Projects / Skills；`zh`→教育经历 / 工作经历 / 研究经历 / 项目经历 / 技能；`current=true` 的结束时间也显示「至今」（`en` 为 Present）。`custom` 块标题始终用 `title` 字段原文，不受此影响 |
+| `meta.sectionTitles` | object | 可选，自动小节标题改名，如 `{ "education": "教育背景" }`。键为 `education` / `work` / `research` / `projects` / `skills`；写了的类型不再随 `meta.language` 变化，没写的照常按语言 |
 | `settings` | object | 可选，排版设置，见 §1.1。缺省或为 `{}` 时用默认排版 |
 | `blocks` | array | 块数组，见下 |
 
-### 1.1 `settings` —— 排版设置（工具栏「排版 ▾」）
+### 1.1 `settings` —— 排版设置（右侧「排版」面板）
 
 所有字段可选，只写想改的项，没写的用默认值。
 
@@ -71,18 +72,27 @@
 | `repeatSectionTitles` | boolean | 默认 `false` | 一个小节跨页时，在下一页开头重复它的标题。**只在 `pagedPreview: true` 时生效** |
 | `showPageNumbers` | boolean | 默认 `true` | 打印页码 |
 | `pageNumberPosition` | string | `left` / `right`；不写 = 居中 | 页码位置（页面底部） |
+| `marginMode` | string | `perPage`；不写 = 每页统一 | 每页单独页边距。**只在 `pagedPreview: true` 时生效** |
+| `pageMargins` | object | 键为页码（`"1"`、`"2"`…，最多 30），值为该页要覆盖的 `marginTop` / `marginRight` / `marginBottom` / `marginLeft`（mm，范围同下面的页边距）；没写的边、没写的页沿用统一页边距 | 例：`{ "2": { "marginTop": 25 } }` 第 2 页上边距 25mm。只在 `marginMode: "perPage"` 且 `pagedPreview: true` 时生效 |
 | `pageNumberFormat` | string | `plain`（1）/ `zh`（第 1 页）/ `zhTotal`（第 1 页 / 共 3 页）/ `en`（Page 1 of 3）；不写 = `1 / 3` | 页码格式 |
 
 - 分页预览按「纸高 − 上下页边距」逐个放置 header、小节标题、条目、技能行，会超出当前页的整块挪到下一页（打印时这些块本来就不拆开）；小节标题总是和它后面的第一块在同一页。开启后预览的页面内边距等于打印页边距。
-- 单个条目比一页还高时无法整块挪动，打印会在条目内部断开，预览不显示这种断点。
+- 块设了 `allowBreak: true`（§2）时不整块挪：在第一个放不下的要点 / 段落处拆成两段，前半段留在本页；条目头部（标题行、机构、成绩、标签）至少带着一条内容，不会单独留在页底。
+- 没设 `allowBreak` 的单个条目比一页还高时无法整块挪动，打印会在条目内部断开，预览不显示这种断点。
+- 「缩到 N 页」按钮会改写 `fontSize`、`lineHeight`、`sectionSpacing`、`marginTop`、`marginBottom`（逐级收紧到不超过 N 页），结果就是普通的设置值。
 - 页码印在下边距里，依赖浏览器对 `@page` 页边框的支持（Chrome / Edge 可以，Firefox 不打印页码）。
 
 **头部**
 
 | 字段 | 类型 | 可选值 / 默认 | 作用 |
 |---|---|---|---|
-| `headerAlign` | string | `center`；不写 = 左对齐 | 姓名、头衔、联系方式等居中。有照片时在照片左侧的区域内居中 |
-| `photoOffsetX` / `photoOffsetY` | number（mm） | −20–20，默认 0 | 照片相对原位置左右 / 上下移动，不影响其他内容的位置 |
+| `headerAlign` | string | `center` / `right`；不写 = 左对齐 | 姓名、头衔、联系方式等的对齐（以整张纸为准）。照片在右上角；靠右时照片换到左上角 |
+| `photoWidth` | number（mm） | 15–60，默认 30 | 照片宽度 |
+| `photoRatio` | string | `r57`（5:7，一寸 / 二寸照）/ `r23`（2:3）/ `square`（1:1）；不写 = 3:4 | 照片比例（高 = 宽 × 比例），照片按 `object-fit: cover` 居中裁切 |
+| `photoOffsetX` / `photoOffsetY` | number（mm） | −20–20，默认 0 | 照片相对原位置左右 / 上下移动（正值向右 / 向下），不影响其他内容的位置 |
+
+- 照片完全不占排版空间，叠在头部的角上：放不放照片、照片怎么调，头部文字的位置、换行、高度和正文的位置都和不放照片时一样。
+- 代价是照片会盖住和它重叠的内容（较长的头部文字行末尾；照片比头部高时还有第一个小节的右侧，如分隔线、时间），用照片大小和偏移自行调开。
 
 **尺寸**（数字；超出范围的值钳到边界，非数字的值忽略）
 
@@ -127,6 +137,7 @@
 | `data` | object | 该类型的字段集合，见 §3 |
 | `visible` | boolean | 可选，默认 `true`；为 `false` 时该块不出现在预览/打印，但数据保留 |
 | `collapsed` | boolean | 可选，仅编辑器折叠用，渲染可忽略，可不写 |
+| `allowBreak` | boolean | 可选，默认不写（= 不跨页）。`true` 时打印 / 分页可在该块的要点、段落之间换页（见 §1.1 分页说明）。`header` 忽略 |
 
 ## 3. 块类型与 `data` 字段
 
@@ -157,7 +168,7 @@
 
 - 占位框是刻意的「你还没放照片」提醒，不做打印隐藏 —— 屏幕上看得见但纸上消失的话，提醒就失效了
 - `photo` 只接受 `data:image/(png|jpeg|webp);base64,` 开头的字符串，其余（`http://`、本地路径、`javascript:` 等）一律按空处理
-- 渲染尺寸固定 30mm × 40mm（3:4），用 `object-fit: cover` 居中裁切，所以**非 3:4 的照片不会失真，但边缘会被裁掉**。竖版 3:4 效果最佳
+- 渲染尺寸默认 30mm × 40mm（3:4），可用 `settings.photoWidth` / `photoRatio` 改（§1.1）。用 `object-fit: cover` 居中裁切，所以**比例不同的照片不会失真，但边缘会被裁掉**
 - 照片是自包含的 base64，**不要写文件路径**：本应用以 `file://` 双击运行为目标，路径在跨浏览器 / 跨机器时不可用
 - AI / agent 通常不必读 `photo` 的值（很长）。要移除照片就把 `photo` 设为 `""`；要连占位框一起关掉，再把 `showPhoto` 设为 `false`
 
@@ -219,7 +230,7 @@
 | `summary` | textarea | 概述 |
 | `highlights` | bullets | 职责/成果，每项一条 |
 
-### 3.4 `projects` —— 项目（小节标题 Projects）
+### 3.4 `projects` —— 项目经历（小节标题 Projects / 项目经历）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -240,14 +251,20 @@
 | `name` | text | 技能组名，如 `"Programming Languages"` |
 | `keywords` | list | 技能项（字符串数组；编辑器里每行一条可编辑。**没有熟练度字段**，熟练度直接写进内容，如 `"Python (Advanced)"`） |
 
-### 3.6 `custom` —— 自定义（字段完全继承 `work`/`research`，另加一个 `title` 小节标题）
+### 3.6 `custom` —— 自定义栏目（自带小节标题，三种版式）
 
-`custom` 的 `data` 与 `work`/`research` 完全相同（`position`/`organization`/`location`/`startDate`/`endDate`/`current`/`url`/`summary`/`highlights`），**仅多一个 `title`**，渲染为小节标题。适合 awards / certifications / languages 等单条目场景。
+`custom` 用 `title` 作小节标题，用 `layout` 选版式。「+」菜单里的栏目模板（实习经历、获奖荣誉、证书资质、自我评价……）新建的都是 `custom` 块，只是预填了 `title` 和 `layout`。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `title` | text | 小节标题（唯一比 work/research 多的字段） |
-| 其余字段 | — | 见 §3.3 |
+| `title` | text | 小节标题 |
+| `layout` | select | `entry`（经历型，默认；缺省也按 entry）/ `list`（列表型）/ `text`（段落型） |
+| `position` … `highlights` | — | `layout: "entry"` 时使用，字段与 `work`/`research` 完全相同，见 §3.3 |
+| `items` | list | `layout: "list"` 时使用：字符串数组，每项渲染为一条要点（如证书、语言、论文） |
+| `content` | textarea | `layout: "text"` 时使用：大段文字，换行即分段（如自我评价） |
+
+- 三种版式的字段可以同时存在，只渲染当前 `layout` 对应的那组；切换版式不会删掉其他字段。
+- 编辑器「⋯ → 转换为…」可以在各类型、各版式之间转换：主标题、机构、概述、要点按对应字段搬过去，原数据保留在 `data` 里，转回原类型能恢复。
 
 > 旧格式（`subtitle`/`rightText`/`columns`/`body`）导入时自动迁移：`subtitle→position`，`body` 的 `- ` 行→`highlights`，其余行→`summary`。
 
@@ -257,7 +274,7 @@
 2. `bullets` / `list` / `tags` 都是字符串数组；空就写 `[]`。
 3. `links` 必须每项有 `id`、`icon`、`url`。
 4. 布尔字段 `current`、`visible` 为 `true`/`false`。
-5. 不要把 `custom` 的 `body` 写成 HTML——只用它的轻量标记语法。
+5. 不要在任何文本字段里写 HTML——加粗用 `**…**`；`custom` 段落型的 `content` 用换行分段，列表型用 `items` 数组，不要在一个字符串里拼 `- ` 列表。
 
 ## 5. 用 JSON Patch 修改数据（AI 编辑方式）
 
@@ -328,13 +345,13 @@ Patch 的**路径根是应用 JSON 对象本身**，一次提交一个 patch 数
 
 ## 7. 渲染规则（AI 应知道的展示行为）
 
-- **小节分组**：连续同类型块合并到一个小节标题下。有自动标题的类型：`education→Education`、`work→Work Experience`、`research→Research Experience`、`projects→Projects`、`skills→Skills`；`header` 与 `custom` 没有自动标题（`custom` 用自身 `title` 作标题）。
+- **小节分组**：连续同类型块合并到一个小节标题下。有自动标题的类型：`education→Education`、`work→Work Experience`、`research→Research Experience`、`projects→Projects`、`skills→Skills`；`header` 与 `custom` 没有自动标题（`custom` 用自身 `title` 作标题）。自动标题可用 `meta.sectionTitles` 改名。
 - **custom 标题合并**：连续多个 `custom` 块的 `title` 相同时，只渲染**一个**小节标题，其下依次列出各块内容（适合把多个同类条目放一个标题下）；`title` 不同或中间隔着其他类型时，各自独立出标题。空 `title` 不渲染标题。
-- **日期显示**：由 `meta.dateFormat` 决定 `Jun 2022` 或 `2022-06`；`current=true` 显示 `开始 – Present`（`meta.language="zh"` 时为 `开始 – 至今`）。
+- **日期显示**：由 `meta.dateFormat` 决定 `Jun 2022`、`2022-06`、`2022.06` 或 `2022年6月`；`current=true` 显示 `开始 – Present`（`meta.language="zh"` 时为 `开始 – 至今`）。
 - **中英标点**：`meta.language="zh"` 时，自动拼接用中文标点——技能/项目列表用 `：` 和 `，`（英文为 `: ` 和 `, `）；教育学位不加 "in"（如 `博士 机械工程`，英文为 `PhD in Mechanical Engineering`）。这些是渲染器拼的，数据里不要自己加标点。
 - **加粗语法**：**所有自由文本字段**都支持 `**加粗**` → `<strong>` —— 姓名、头衔、自定义信息的名称/内容、邮箱/电话/所在地、链接标签、学位/专业/学校/成绩/课程、职位/机构、项目名/角色/关键词、技能组名/技能项、简介、职责、亮点。渲染器**先转义再套加粗**，所以加粗不放松任何转义（`**<img src=x>**` 只会得到字面量的尖括号）；`**` 之外的 HTML 标签一律按字面量显示。**URL（`href` / `src`）不做 markdown 处理** —— 往链接地址里塞 `<strong>` 没有意义。
 - **自定义信息**：`details` 渲染在头衔与联系方式之间，流式排列（`flex-wrap`），每条 `名称：内容` 用 `white-space: nowrap` 保证整条不被拆行；空条目直接跳过，全空时不输出任何 DOM。
-- **照片**：`showPhoto=true` 时 header 变为两列 —— 正文在左，30×40mm 照片框在右上角（3:4，`object-fit: cover`）；`showPhoto=true` 但 `photo` 为空时右上角渲染**会打印出来的**虚线占位框；`showPhoto` 为假（含老数据缺该键）时 header 版面与没有照片功能时**逐字节一致**。
+- **照片**：`showPhoto=true` 时照片框叠在头部右上角（`headerAlign: "right"` 时左上角，默认 30×40mm，`object-fit: cover`），不占排版空间，不影响头部文字和正文的位置；`showPhoto=true` 但 `photo` 为空时右上角渲染**会打印出来的**虚线占位框；`showPhoto` 为假（含老数据缺该键）时 header 版面与没有照片功能时**逐字节一致**。
 - `visible:false` 的块在预览/打印中隐藏。
 - 顺序即文档顺序：header 建议放最前；想让某小节出现在别的类型之间，就调整 `blocks` 数组顺序。
 

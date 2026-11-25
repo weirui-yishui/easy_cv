@@ -92,8 +92,9 @@ class StateStore {
     this.history = [deepClone(s)]; this.historyIdx = 0; this.lastMergeKey = null;
     this.autosave(); this.emit('structure');
   }
-  addBlock(type, afterId) {
+  addBlock(type, afterId, dataPatch) {
     const blk = BlockRegistry.make(type);
+    if (dataPatch) Object.assign(blk.data, dataPatch);   // 栏目模板：预填 title / layout
     const idx = afterId ? this.state.blocks.findIndex(b => b.id === afterId) + 1 : this.state.blocks.length;
     this.state.blocks.splice(idx, 0, blk);
     this.commit(null, 'structure');
@@ -117,6 +118,42 @@ class StateStore {
     if (i < 0 || j < 0 || j >= this.state.blocks.length) return;
     const [b] = this.state.blocks.splice(i, 1);
     this.state.blocks.splice(j, 0, b);
+    this.commit(null, 'structure');
+  }
+  // 拖动排序：把块移到 toIndex（按移除该块之前的下标计算插入点）
+  moveBlockTo(id, toIndex) {
+    const i = this.state.blocks.findIndex(b => b.id === id);
+    if (i < 0) return;
+    const j = Math.max(0, Math.min(this.state.blocks.length, toIndex)) - (toIndex > i ? 1 : 0);
+    if (j === i) return;
+    const [b] = this.state.blocks.splice(i, 1);
+    this.state.blocks.splice(j, 0, b);
+    this.commit(null, 'structure');
+  }
+  convertBlock(id, toType, layout) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b) return false;
+    const lang = (this.state.meta && this.state.meta.language) === 'zh' ? 'zh' : 'en';
+    const data = convertBlockData(b, toType, layout, sectionTitleFor(b.type, this.state.meta, lang));
+    if (!data) return false;
+    b.type = toType;
+    b.data = data;
+    this.commit(null, 'structure');
+    return true;
+  }
+  // 小节标题改名：'' = 恢复默认（按语言自动）
+  setSectionTitle(type, title) {
+    this.state.meta = this.state.meta || {};
+    const map = Object.assign({}, this.state.meta.sectionTitles);
+    const t = String(title || '').trim();
+    if (t) map[type] = t; else delete map[type];
+    if (Object.keys(map).length) this.state.meta.sectionTitles = map; else delete this.state.meta.sectionTitles;
+    this.commit(null, 'data');
+  }
+  toggleVisible(id) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b) return;
+    b.visible = b.visible === false;
     this.commit(null, 'structure');
   }
   duplicateBlock(id) {
@@ -183,6 +220,34 @@ class StateStore {
     this.state.settings[key] = v;
     this.commit('settings:' + key, 'data');
     return true;
+  }
+  // 一次写入多项（「缩到 N 页」用）：合成一步撤销
+  setSettings(obj) {
+    const s = Object.assign({}, this.state.settings);
+    for (const k of Object.keys(obj)) { const v = clampSetting(k, obj[k]); if (v !== null) s[k] = v; }
+    this.state.settings = s;
+    this.commit(null, 'data');
+  }
+  // 每页单独页边距：value 为 '' / null = 清除该页这一边（回到统一值）
+  setPageMargin(n, key, value) {
+    n = Number(n);
+    if (!MARGIN_KEYS.includes(key) || !Number.isInteger(n) || n < 1 || n > MAX_PAGES) return false;
+    let v = null;
+    if (value !== '' && value != null) { v = clampSetting(key, value); if (v === null) return false; }
+    const s = this.state.settings = this.state.settings || {};
+    const pm = Object.assign({}, s.pageMargins);
+    const cur = Object.assign({}, pm[n]);
+    if (v === null) delete cur[key]; else cur[key] = v;
+    if (Object.keys(cur).length) pm[n] = cur; else delete pm[n];
+    if (Object.keys(pm).length) s.pageMargins = pm; else delete s.pageMargins;
+    this.commit('pm:' + n + ':' + key, 'data');
+    return true;
+  }
+  toggleAllowBreak(id) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b || b.type === 'header') return;
+    if (b.allowBreak) delete b.allowBreak; else b.allowBreak = true;
+    this.commit(null, 'structure');
   }
   resetSettings() {
     delete this.state.settings;

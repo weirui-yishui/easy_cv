@@ -555,11 +555,192 @@ const tests = `
   store.resetSettings();
 
   // 面板：每个键都能生成一行，PANEL_LAYOUT 不漏项、不重复
-  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys);
+  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys).filter(k => k[0] !== '@');   // @ 开头是面板里的组件（每页页边距、缩到 N 页），不是设置项
   const allKeys = LAYOUT_SETTINGS.map(d => d.key).concat(Object.keys(CHOICE_SETTINGS), TOGGLE_SETTINGS.map(t => t.key));
   assert(panelKeys.length === new Set(panelKeys).size, '面板键不重复');
   assert(allKeys.every(k => panelKeys.includes(k)) && panelKeys.every(k => allKeys.includes(k)), '面板覆盖全部设置项');
   assert(panelKeys.every(k => layoutRowHTML(k).includes('data-setting="' + k + '"')), '每个设置项都生成控件');
+
+  // 19. 编辑器：Ctrl+B 加粗 / 拖动排序 / 显示隐藏 / 预览定位标记
+  const tb = (v, a, b) => JSON.stringify(toggleBoldMarkup(v, a, b));
+  assert(tb('abc def', 4, 7) === JSON.stringify({ value: 'abc **def**', start: 6, end: 9 }), '选中文字 → 加 **，选区仍框住原文字');
+  assert(tb('abc **def**', 6, 9) === JSON.stringify({ value: 'abc def', start: 4, end: 7 }), '选区两侧是 ** → 去掉');
+  assert(tb('abc **def**', 4, 11) === JSON.stringify({ value: 'abc def', start: 4, end: 7 }), '选区连 ** 一起选中 → 去掉');
+  assert(tb('ab', 1, 1) === JSON.stringify({ value: 'a****b', start: 3, end: 3 }), '无选区 → 插入 **** 光标居中');
+  assert(tb('**', 0, 2) === JSON.stringify({ value: '******', start: 2, end: 4 }), '只选中两个星号不算已加粗，照常包一层');
+  assert(tb('x', 0, 1) === JSON.stringify({ value: '**x**', start: 2, end: 3 }), '选区在开头（前面不足两个字符）也正常');
+
+  store.setState(deepClone(SAMPLE));
+  const ids0 = store.state.blocks.map(b => b.id);
+  store.moveBlockTo(ids0[0], 3);
+  assert(store.state.blocks.map(b => b.id).join() === [ids0[1], ids0[2], ids0[0], ...ids0.slice(3)].join(), 'moveBlockTo 下移：插到原第 3 个之前');
+  store.moveBlockTo(ids0[0], 0);
+  assert(store.state.blocks.map(b => b.id).join() === ids0.join(), 'moveBlockTo 移回顶部');
+  store.moveBlockTo(ids0[1], store.state.blocks.length);
+  assert(store.state.blocks[store.state.blocks.length - 1].id === ids0[1], 'moveBlockTo 移到末尾');
+  store.undo();
+  assert(store.state.blocks.map(b => b.id).join() === ids0.join(), '拖动排序可撤销');
+
+  const rid = store.state.blocks.find(b => b.type === 'research').id;
+  store.setField(rid, 'highlights', ['a', 'b', 'c']);
+  moveBullet(rid, 'highlights', 0, 3);
+  assert(store.state.blocks.find(b => b.id === rid).data.highlights.join() === 'b,c,a', '要点拖到末尾');
+  moveBullet(rid, 'highlights', 2, 0);
+  assert(store.state.blocks.find(b => b.id === rid).data.highlights.join() === 'a,b,c', '要点拖到开头');
+
+  store.toggleVisible(rid);
+  assert(store.state.blocks.find(b => b.id === rid).visible === false, '隐藏块');
+  assert(!els['#preview-pane'].innerHTML.includes('data-bid="' + rid + '"'), '隐藏的块不出现在预览');
+  assert(blockCardHTML(store.state.blocks.find(b => b.id === rid)).includes('is-hidden'), '编辑器里标出已隐藏');
+  store.toggleVisible(rid);
+  assert(store.state.blocks.find(b => b.id === rid).visible === true, '重新显示');
+
+  renderPreview(store.state);
+  const p19 = els['#preview-pane'].innerHTML;
+  assert(store.state.blocks.every(b => p19.includes('data-bid="' + b.id + '"')), '每个块的预览元素都带 data-bid');
+  assert(p19.includes('<header data-bid="' + store.state.blocks[0].id + '" class="cv-header">'), 'data-bid 加在块最外层元素上');
+  const evilId = { id: 'x" onclick="alert(1)', type: 'skills', data: { name: 'S', keywords: [] }, visible: true };
+  assert(!renderSequence([evilId], tctx).includes('onclick="alert'), '块 id 被转义，不能注入属性');
+
+  // 20. 栏目：项目经历 / 自定义版式 / 栏目模板 / 类型转换 / 小节标题改名
+  store.setState(deepClone(SAMPLE));
+  store.addBlock('projects');
+  store.setLanguage('zh');
+  assert(els['#preview-pane'].innerHTML.includes('section-title">项目经历<'), '中文小节标题：项目经历');
+  assert(BLOCK_TYPES.projects.label === '项目经历', '添加菜单标签：项目经历');
+
+  // 自定义块三种版式
+  const cl = r => customRender({ data: r }, zhCtx);
+  assert(cl({ title: 'T', position: 'P' }).includes('<h3>P</h3>'), '缺 layout 的旧 custom 按经历型渲染');
+  assert(cl({ layout: 'list', items: ['**CET-6**', '', 'IELTS 7.5'] }) === '<section class="custom-block"><ul><li><strong>CET-6</strong></li><li>IELTS 7.5</li></ul></section>', '列表型：每行一条、空行跳过、支持加粗');
+  assert(cl({ layout: 'text', content: '第一段' + String.fromCharCode(10, 10) + '第二段 <b>' }) === '<section class="custom-block"><p class="custom-text">第一段</p><p class="custom-text">第二段 &lt;b&gt;</p></section>', '段落型：换行分段、转义');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: { layout: 'list' } }).map(f => f.key).join() === 'title,layout,items', '列表型编辑器字段');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: { layout: 'text' } }).map(f => f.key).join() === 'title,layout,content', '段落型编辑器字段');
+  assert(BLOCK_TYPES.custom.fieldsFor({ data: {} }).length === BLOCK_TYPES.custom.fields.length, '经历型显示全部字段');
+
+  // 栏目模板（存浏览器，缺省为预设）
+  localStorage.removeItem('easy_cv.sectionTemplates');
+  assert(getSectionTemplates().length === SECTION_TEMPLATE_PRESETS.length, '没存过 → 预设');
+  saveSectionTemplates([{ title: '  科研项目 ', en: 'Research Projects', layout: 'entry' }, { title: '', layout: 'list' }, { title: '爱好', layout: 'bogus' }]);
+  assert(JSON.stringify(getSectionTemplates()) === JSON.stringify([{ title: '科研项目', en: 'Research Projects', layout: 'entry' }, { title: '爱好', en: '', layout: 'entry' }]), '保存时去空标题、修正非法版式');
+  localStorage.setItem('easy_cv.sectionTemplates', '{bad json');
+  assert(getSectionTemplates().length === SECTION_TEMPLATE_PRESETS.length, '存坏了 → 回退预设');
+  saveSectionTemplates([{ title: '科研项目', en: 'Research Projects', layout: 'list' }]);
+  const tplId = addBlockFromTemplate(0, null);
+  const tplBlk = store.state.blocks.find(b => b.id === tplId);
+  assert(tplBlk.type === 'custom' && tplBlk.data.title === '科研项目' && tplBlk.data.layout === 'list', '中文模式用中文标题建块');
+  store.setLanguage('en');
+  const tplId2 = addBlockFromTemplate(0, null);
+  assert(store.state.blocks.find(b => b.id === tplId2).data.title === 'Research Projects', '英文模式用英文标题');
+  localStorage.removeItem('easy_cv.sectionTemplates');
+
+  // 类型转换：保留原数据，转回去可恢复
+  store.setState(deepClone(SAMPLE));
+  const wk = store.state.blocks.find(b => b.type === 'research');
+  const orig = deepClone(wk.data);
+  assert(store.convertBlock(wk.id, 'education') === true, '研究经历 → 教育经历');
+  let cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.type === 'education' && cv.data.degree === orig.position && cv.data.institution === orig.organization, '主标题→学位、机构→学校');
+  assert(JSON.stringify(cv.data.highlights) === JSON.stringify(orig.highlights) && cv.data.startDate === orig.startDate, '要点、日期保留');
+  store.convertBlock(wk.id, 'research');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(['position', 'organization', 'summary', 'highlights', 'startDate', 'current'].every(k => JSON.stringify(cv.data[k]) === JSON.stringify(orig[k])), '转回原类型：内容原样恢复');
+
+  store.convertBlock(wk.id, 'custom', 'text');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.data.layout === 'text' && cv.data.title === 'Research Experience', '转成自定义：小节标题取原类型标题');
+  assert(cv.data.content.startsWith(orig.position + String.fromCharCode(10) + orig.organization) && cv.data.content.includes(orig.highlights[0]), '转段落型：标题、机构、要点并进正文，不丢内容');
+  store.convertBlock(wk.id, 'custom', 'list');
+  cv = store.state.blocks.find(b => b.id === wk.id);
+  assert(cv.data.layout === 'list' && cv.data.items.length > 0, '段落型 → 列表型');
+  store.undo();
+  assert(customLayout(store.state.blocks.find(b => b.id === wk.id).data) === 'text', '撤销一步回到段落型');
+  store.undo(); store.undo(); store.undo();
+  assert((x => x.type === 'research' && JSON.stringify(x.data) === JSON.stringify(orig))(store.state.blocks.find(b => b.id === wk.id)), '四次转换全部撤销后与原块完全一致');
+  assert(store.convertBlock(store.state.blocks[0].id, 'work') === false && store.state.blocks[0].type === 'header', '个人信息不能转换');
+  assert(store.convertBlock(wk.id, 'nope') === false, '未知目标类型拒绝');
+
+  // 小节标题改名
+  store.setSectionTitle('education', '  教育背景 ');
+  assert(store.state.meta.sectionTitles.education === '教育背景', '改名去首尾空格');
+  assert(els['#preview-pane'].innerHTML.includes('section-title">教育背景<') && !els['#preview-pane'].innerHTML.includes('>Education<'), '预览使用改后的标题（不受语言影响）');
+  store.setSectionTitle('education', '');
+  assert(!('sectionTitles' in store.state.meta), '清空即恢复默认，空对象不留在 JSON 里');
+  assert(sectionTitleFor('skills', { sectionTitles: { skills: 7 } }, 'zh') === '技能', '非字符串改名值被忽略');
+
+  // 21. 照片大小 / 比例，中文日期格式
+  assert(fmtDate('2022-06', 'YYYY.MM') === '2022.06' && fmtDate('2022-06', 'YYYY年M月') === '2022年6月', '中文日期格式');
+  assert(fmtDate('2022-11', 'YYYY年M月') === '2022年11月' && fmtDate('2022', 'YYYY年M月') === '2022', '两位月份、只有年份');
+  assert(rangeText('2021-09', '', true, 'YYYY年M月', 'zh') === '2021年9月 – 至今', '至今与中文日期组合');
+  store.setState(deepClone(SAMPLE));
+  store.setDateFormat('YYYY.MM');
+  assert(els['#preview-pane'].innerHTML.includes('2024.09 – Present'), '预览按 YYYY.MM 显示');
+
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('--photo-'), '照片未调：不输出变量（仍是 30×40mm）');
+  store.setSetting('photoWidth', 35);
+  store.setSetting('photoRatio', 'r57');
+  const p21 = els['#preview-pane'].innerHTML;
+  assert(p21.includes('--photo-hr:7 / 5') && p21.includes('--photo-w:35mm'), '照片宽度 + 一寸比例');
+  assert(store.setSetting('photoRatio', '16:9') === false, '未知比例拒绝');
+  store.setSetting('photoWidth', 200);
+  assert(store.state.settings.photoWidth === 60, '照片宽度钳到 60mm');
+  store.resetSettings();
+
+  // 22. 允许跨页 / 每页单独页边距 / 一次写入多项设置
+  store.setState(deepClone(SAMPLE));
+  const ab = store.state.blocks.find(b => b.type === 'research');
+  store.toggleAllowBreak(ab.id);
+  assert(store.state.blocks.find(b => b.id === ab.id).allowBreak === true, '开启允许跨页');
+  assert(els['#preview-pane'].innerHTML.includes('data-bid="' + ab.id + '" data-break="1"'), '预览元素带 data-break');
+  assert(blockCardHTML(store.state.blocks.find(b => b.id === ab.id)).includes('可跨页'), '编辑器卡片显示「可跨页」');
+  store.toggleAllowBreak(ab.id);
+  assert(!('allowBreak' in store.state.blocks.find(b => b.id === ab.id)), '关闭时删除该键');
+  store.toggleAllowBreak(store.state.blocks[0].id);
+  assert(!store.state.blocks[0].allowBreak, '个人信息不能设为跨页');
+
+  // 每页单独页边距：只有「每页单独 + 分页预览」都开时生效
+  const sPM = { marginTop: 12, marginMode: 'perPage', pageMargins: { 2: { marginTop: 25, marginLeft: 'x', marginRight: 99 } } };
+  assert(pageMarginsFor(sPM, 2).marginTop === 12, '没开分页预览：每页单独不生效');
+  sPM.pagedPreview = true;
+  const m2 = pageMarginsFor(sPM, 2);
+  assert(m2.marginTop === 25 && m2.marginLeft === 15 && m2.marginRight === 30 && m2.marginBottom === 18, '第 2 页：覆盖的边生效、非法值回落、超限钳位、其余沿用统一值');
+  assert(pageMarginsFor(sPM, 3).marginTop === 12 && pageMarginsFor(sPM, null).marginTop === 12, '没设的页 / 统一值');
+  assert(namedPagesCSS(sPM, 2) === '@page p1 { margin: 12mm 15mm 18mm 15mm; } @page p2 { margin: 25mm 30mm 18mm 15mm; }', '具名页面 CSS');
+  assert(namedPagesCSS({ marginMode: 'perPage' }, 2) === '', '没开分页预览：不输出具名页面');
+
+  store.setSetting('pagedPreview', true);
+  store.setSetting('marginMode', 'perPage');
+  assert(els['#preview-pane'].innerHTML.includes('per-page'), '.page 加 per-page');
+  assert(store.setPageMargin(2, 'marginTop', 22) && store.state.settings.pageMargins[2].marginTop === 22, 'setPageMargin 写入');
+  store.setPageMargin(2, 'marginTop', 23);
+  store.undo();
+  assert(!store.state.settings.pageMargins, '同一页同一边连续修改合并为一步撤销（22、23 一起撤掉）');
+  store.setPageMargin(2, 'marginTop', 22);
+  store.setPageMargin(2, 'marginTop', '');
+  assert(!('pageMargins' in store.state.settings), '清空最后一项 → 删除 pageMargins');
+  assert(store.setPageMargin(0, 'marginTop', 10) === false && store.setPageMargin(2, 'nope', 10) === false && store.setPageMargin(2, 'marginTop', 'abc') === false, '非法页码 / 键 / 值拒绝');
+  store.resetSettings();
+
+  store.setSettings({ fontSize: 9.5, lineHeight: 1.3, sectionSpacing: 'x' });
+  assert(store.state.settings.fontSize === 9.5 && store.state.settings.lineHeight === 1.3 && !('sectionSpacing' in store.state.settings), 'setSettings 一次写入多项，非法值跳过');
+  store.undo();
+  assert(!store.state.settings || !('fontSize' in store.state.settings), 'setSettings 一步撤销');
+
+  // 23. 头部对齐：左 / 居中 / 靠右（靠右时照片换到左上角，由 CSS 的 header-right 决定）
+  store.setState(deepClone(SAMPLE));
+  store.setSetting('headerAlign', 'right');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic header-right"'), '靠右 → header-right');
+  store.setSetting('headerAlign', 'center');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic header-center"'), '居中 → header-center');
+  assert(store.setSetting('headerAlign', 'justify') === false, '未知对齐方式拒绝');
+  store.setSetting('headerAlign', '');
+  assert(els['#preview-pane'].innerHTML.includes('class="page classic"'), '左对齐：不加 class');
+  // 照片大小 / 位置只通过 CSS 变量作用在照片上，不改头部 HTML 结构
+  const hNo = headerRender({ data: { name: 'A', showPhoto: true, photo: '' } }, tctx);
+  store.setSettings({ photoWidth: 50, photoOffsetX: 5 });
+  assert(headerRender({ data: { name: 'A', showPhoto: true, photo: '' } }, tctx) === hNo, '照片设置不影响头部 HTML');
+  store.resetSettings();
 
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });

@@ -39,7 +39,11 @@ Easy CV 的 JSON 格式由项目根目录的 **`CV_JSON_SPEC.md`** 权威定义�
    - 研究项目 → `research` 块（`position` 可填 "PhD Candidate / Research Assistant / 项目名"）
    - 项目 → `projects` 块
    - 技能 → `skills` 块（按类别分组，如 Programming / Tools）
-   - 其他（出版物、奖项、证书、语言、教学）→ `custom` 块：`title` 作小节标题 + 复用 experience 字段（`position`/`organization`/`startDate`/`highlights`）
+   - 其他栏目 → `custom` 块，`title` 作小节标题，按内容形态选 `layout`（见规范 §3.6）：
+     - 有职位 / 机构 / 时间的（实习、校园经历、志愿服务、获奖、教学）→ `layout: "entry"`，复用 experience 字段（`position`/`organization`/`startDate`/`highlights`）
+     - 一条一条的短条目（论文、证书、语言、兴趣）→ `layout: "list"`，内容放 `items` 字符串数组
+     - 大段文字（自我评价、个人陈述）→ `layout: "text"`，内容放 `content`，换行分段
+   - 中文简历的「项目」栏目对应 `projects` 块（中文小节标题显示为「项目经历」）；源简历里的小节叫法和默认标题不同（如「教育背景」）时，可写进 `meta.sectionTitles`
 5. **生成 JSON 文件**：顶层为
    ```json
    {
@@ -51,8 +55,9 @@ Easy CV 的 JSON 格式由项目根目录的 **`CV_JSON_SPEC.md`** 权威定义�
    }
    ```
    `theme` 可选 `classic`（衬线）或 `modern`（无衬线），决定默认字体；`accent` 为主题色 `#RRGGBB`。
+   - **`meta.dateFormat` 跟随源简历的写法**：`Sep 2024` → `"MMM YYYY"`，`2024-09` → `"YYYY-MM"`，`2024.09` → `"YYYY.MM"`，`2024年9月` → `"YYYY年M月"`。数据里的日期仍一律存 `"YYYY-MM"`，这里只决定显示格式。中文简历同时设 `meta.language: "zh"`（小节标题和「至今」用中文）。
    - **排版 `settings`（可选，默认不写）**：字号、行距、页边距、中西文字体、项目符号、分页、页码等，字段和取值范围见 `CV_JSON_SPEC.md` §1.1。
-     - 只有源文件**明确给出**排版数值时才填，典型情况是源文件是其他简历编辑器导出的 JSON（带 `fontSize` / `lineHeight` / `margin*` 之类的设置）。PDF / Word 里目测出来的字号、边距不要填，用默认值，用户导入后在「排版 ▾」面板里调。
+     - 只有源文件**明确给出**排版数值时才填，典型情况是源文件是其他简历编辑器导出的 JSON（带 `fontSize` / `lineHeight` / `margin*` 之类的设置）。PDF / Word 里目测出来的字号、边距不要填，用默认值，用户导入后在右侧「排版」面板里调。
      - 换算单位：`fontSize` 是 pt（源里是 px 时 × 0.75），页边距是 mm，分块字号是相对 `fontSize` 的倍率。单位拿不准就不填，并在交付说明里列出没迁移的设置。
      - 超出 §1.1 范围的值导入时会被钳到边界；字体、项目符号只能用 §1.1 列出的选项键，对不上的不填。
 6. **写文件**：默认存到源文件旁，如 `<name>.json`；告诉用户路径和导入步骤。

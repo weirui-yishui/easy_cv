@@ -24,8 +24,74 @@ function bindEvents() {
       case 'toggle': store.toggleCollapsed(id); break;
       case 'up': store.moveBlock(id, -1); break;
       case 'down': store.moveBlock(id, 1); break;
-      case 'menu': menuBlockId = id; showMenu($('#blockMenu'), a.getBoundingClientRect()); break;
+      case 'menu': {
+        menuBlockId = id;
+        const b = store.state.blocks.find(x => x.id === id);
+        $('#menu-convert').hidden = !b || b.type === 'header';
+        $('#menu-break').hidden = !b || b.type === 'header';
+        $('#menu-break').textContent = (b && b.allowBreak ? '☑' : '☐') + ' 允许跨页（在要点之间断开）';
+        showMenu($('#blockMenu'), a.getBoundingClientRect());
+        break;
+      }
+      case 'visible': store.toggleVisible(id); break;
     }
+  });
+
+  // 拖动排序：块（抓标题栏左侧 ⋮⋮）与要点（抓行首 ⋮⋮），落点按鼠标在目标上半 / 下半决定插在前 / 后
+  let drag = null;
+  const clearDrop = () => list.querySelectorAll('.drop-before, .drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+  const dropTarget = e => {
+    if (!drag) return null;
+    const el = drag.kind === 'block' ? e.target.closest('.block-card') : e.target.closest('.bullet-row');
+    if (!el) return null;
+    if (drag.kind === 'bullet' && el.closest('.field') !== drag.field) return null;   // 要点只在本字段内移动
+    const r = el.getBoundingClientRect();
+    return { el, after: e.clientY > r.top + r.height / 2 };
+  };
+  list.addEventListener('dragstart', e => {
+    const h = e.target.closest && e.target.closest('.drag-handle');
+    if (!h) return;
+    const card = h.closest('.block-card');
+    const row = h.closest('.bullet-row');
+    drag = row
+      ? { kind: 'bullet', id: card.dataset.blockId, field: row.closest('.field'), key: row.closest('.field').dataset.key, from: +row.dataset.dragRow }
+      : { kind: 'block', id: card.dataset.blockId };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');   // Firefox 不设数据不触发拖动
+    const ghost = row || card;
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(ghost, 12, 12);
+    ghost.classList.add('dragging');
+  });
+  list.addEventListener('dragover', e => {
+    const t = dropTarget(e);
+    if (!t) return;
+    e.preventDefault();
+    clearDrop();
+    t.el.classList.add(t.after ? 'drop-after' : 'drop-before');
+  });
+  list.addEventListener('drop', e => {
+    const t = dropTarget(e);
+    clearDrop();
+    if (!t) return;
+    e.preventDefault();
+    if (drag.kind === 'block') {
+      const to = store.state.blocks.findIndex(b => b.id === t.el.dataset.blockId) + (t.after ? 1 : 0);
+      store.moveBlockTo(drag.id, to);
+    } else {
+      moveBullet(drag.id, drag.key, drag.from, +t.el.dataset.dragRow + (t.after ? 1 : 0));
+    }
+  });
+  list.addEventListener('dragend', () => {
+    clearDrop();
+    list.querySelectorAll('.dragging').forEach(x => x.classList.remove('dragging'));
+    drag = null;
+  });
+
+  // 点预览里的条目 → 左侧跳到对应块（可在缩放条关掉）；点链接时不跳
+  $('#preview-pane').addEventListener('click', e => {
+    if (!previewJumpOn() || e.target.closest('a')) return;
+    const el = e.target.closest('[data-bid]');
+    if (el) jumpToBlock(el.dataset.bid);
   });
 
   // 文本输入 → 更新状态（预览即时刷新，编辑器不重建以保留焦点）
@@ -74,6 +140,7 @@ function bindEvents() {
     if (el.matches('select[data-field]')) {
       const card = el.closest('.block-card');
       store.setField(card.dataset.blockId, el.dataset.field, el.value);
+      if (el.dataset.field === 'layout') renderEditor();   // 换版式 = 换一套字段
     }
   });
 
@@ -117,6 +184,29 @@ function bindEvents() {
       }
       case 'menu-insert': addMenuAfterId = menuBlockId; showMenu($('#addMenu'), p.getBoundingClientRect()); break;
       case 'menu-dup': { const nid = store.duplicateBlock(menuBlockId); hideMenus(); focusBlock(nid); break; }
+      case 'menu-break': store.toggleAllowBreak(menuBlockId); hideMenus(); break;
+      case 'menu-convert': {
+        const b = store.state.blocks.find(x => x.id === menuBlockId);
+        if (!b || b.type === 'header') break;
+        // 子菜单开在块菜单右侧，和「转换为…」这一项顶端对齐，不压住块菜单其他项
+        const r = p.getBoundingClientRect(), menuR = $('#blockMenu').getBoundingClientRect();
+        buildConvertMenu(b);
+        showMenu($('#convertMenu'), { left: menuR.right + 4, top: r.top, bottom: r.top - 4, right: menuR.right + 4 });
+        break;
+      }
+      case 'convert-to': {
+        const ok = store.convertBlock(menuBlockId, p.dataset.type, p.dataset.layout);
+        hideMenus();
+        if (ok) { focusBlock(menuBlockId); showToast('已转换；原有内容都保留着，转回去即可恢复'); }
+        break;
+      }
+      case 'pick-tpl': { const bid = addBlockFromTemplate(+p.dataset.i, addMenuAfterId); hideMenus(); if (bid) focusBlock(bid); break; }
+      case 'manage-tpl': hideMenus(); openTemplates(); break;
+      case 'tpl-add': $('#tpl-rows').insertAdjacentHTML('beforeend', tplRowHTML({ title: '', en: '', layout: 'entry' })); break;
+      case 'tpl-del': p.closest('.tpl-row').remove(); break;
+      case 'tpl-reset': openTemplates(deepClone(SECTION_TEMPLATE_PRESETS)); break;
+      case 'tpl-save': saveSectionTemplates(readTemplateRows()); $('#sections-modal').hidden = true; showToast('栏目已保存'); break;
+      case 'tpl-close': $('#sections-modal').hidden = true; break;
       case 'menu-del': store.deleteBlock(menuBlockId); hideMenus(); break;
       case 'undo': store.undo(); break;
       case 'redo': store.redo(); break;
@@ -131,7 +221,13 @@ function bindEvents() {
       case 'swatch-edit': startEditSwatch(swatchMenuHex); break;
       case 'swatch-del': removeCustomColor(swatchMenuHex); hideMenus(); showToast('已删除 ' + swatchMenuHex); break;
       case 'accent-random': { const hex = randomAccent(); store.setAccent(hex); syncAccentUI(); showToast('随机配色 ' + hex); break; }
-      case 'dd-layout': syncLayoutUI(); showMenu($('#layoutMenu'), p.getBoundingClientRect()); break;
+      case 'toggle-layout': setLayoutPaneOpen(!layoutPaneOpen()); break;
+      case 'zoom-in': stepZoom(1); break;
+      case 'zoom-out': stepZoom(-1); break;
+      case 'zoom-fit': setZoomPref('fit'); break;
+      case 'toggle-jump': setPreviewJump(!previewJumpOn()); break;
+      case 'fit-pages': fitToPages(+$('#fit-n').value); break;
+      case 'pm-clear': MARGIN_KEYS.forEach(k => store.setPageMargin(+$('#pm-page').value, k, '')); syncLayoutUI(); break;
       case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
@@ -156,7 +252,9 @@ function bindEvents() {
   });
 
   // 排版面板：滑块和数字框都实时生效，并互相同步
-  $('#layoutMenu').addEventListener('input', e => {
+  $('#layout-pane').addEventListener('input', e => {
+    if (e.target.dataset.pm) { store.setPageMargin(+$('#pm-page').value, e.target.dataset.pm, e.target.value); return; }
+    if (e.target.id === 'pm-page') { syncLayoutUI(); return; }
     const key = e.target.dataset.setting;
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (!key || !store.setSetting(key, value)) return;
@@ -182,6 +280,7 @@ function bindEvents() {
     if (mod && !e.shiftKey && k === 'z') { e.preventDefault(); store.undo(); }
     else if (mod && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); store.redo(); }
     else if (mod && !e.shiftKey && k === 's') { e.preventDefault(); saveJSONFile(); }
+    else if (mod && !e.shiftKey && !e.altKey && k === 'b' && isBoldTarget(e.target)) { e.preventDefault(); applyBold(e.target); }
   });
 
 }
@@ -277,7 +376,49 @@ function addCustomColor() {
   buildColorMenu(); syncAccentUI();
   showToast('已添加 ' + hex);
 }
-/* ---- 排版面板 ---- */
+/* ---- Ctrl/⌘+B 加粗：只作用于编辑器里的文本框 ---- */
+function isBoldTarget(el) {
+  return !!el && !!el.closest && !!el.closest('#block-list')
+    && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text'));
+}
+function applyBold(el) {
+  const r = toggleBoldMarkup(el.value, el.selectionStart, el.selectionEnd);
+  el.value = r.value;
+  el.setSelectionRange(r.start, r.end);
+  el.dispatchEvent(new Event('input', { bubbles: true }));   // 走原有的 input 处理，写回状态、可撤销
+}
+
+/* ---- 点预览定位开关（界面偏好，存浏览器） ---- */
+const JUMP_KEY = 'easy_cv.previewJump';
+function previewJumpOn() { try { return localStorage.getItem(JUMP_KEY) !== 'off'; } catch (e) { return true; } }
+function setPreviewJump(on) {
+  try { localStorage.setItem(JUMP_KEY, on ? 'on' : 'off'); } catch (e) { /* 忽略 */ }
+  applyPreviewJump();
+}
+function applyPreviewJump() {
+  const on = previewJumpOn();
+  const pane = $('#preview-pane'); if (pane && pane.classList) pane.classList.toggle('jump-on', on);
+  const btn = $('#btn-jump'); if (btn && btn.classList) btn.classList.toggle('active', on);
+}
+
+/* ---- 排版面板（右侧，可收起；开合状态存浏览器） ---- */
+const LAYOUT_PANE_KEY = 'easy_cv.layoutPane';
+function layoutPaneOpen() {
+  try { return localStorage.getItem(LAYOUT_PANE_KEY) !== 'closed'; } catch (e) { return true; }
+}
+function setLayoutPaneOpen(open) {
+  try { localStorage.setItem(LAYOUT_PANE_KEY, open ? 'open' : 'closed'); } catch (e) { /* 忽略 */ }
+  applyLayoutPane();
+}
+function applyLayoutPane() {
+  const open = layoutPaneOpen();
+  const body = document.querySelector('.app-body');
+  if (body && body.classList) body.classList.toggle('layout-collapsed', !open);
+  const btn = $('#btn-layout');
+  if (btn && btn.classList) btn.classList.toggle('active', open);
+  if (open) syncLayoutUI();
+  applyZoom();   // 面板开合改变预览区宽度，「适应宽度」要重算
+}
 function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
 function choiceRowHTML(key) {
   const f = CHOICE_SETTINGS[key];
@@ -287,6 +428,20 @@ function choiceRowHTML(key) {
     + '</select></div>';
 }
 function layoutRowHTML(key) {
+  if (key === '@pageMargins') {
+    // 每页单独页边距的编辑区：选页码，四边留空 = 沿用上面的统一值
+    return '<div class="page-margin-editor" id="pm-editor">'
+      + '<div class="layout-row"><label>第几页</label><select id="pm-page"></select>'
+      + '<button class="btn small" data-act="pm-clear" title="本页四边都回到统一值">清除本页</button></div>'
+      + MARGIN_KEYS.map(k => '<div class="layout-row"><label>' + layoutDef(k).label + '</label>'
+        + '<input type="number" data-pm="' + k + '" min="' + layoutDef(k).min + '" max="' + layoutDef(k).max + '" step="1">'
+        + '<span class="unit">mm</span></div>').join('')
+      + '<p class="layout-hint">留空 = 沿用上面的统一页边距。</p></div>';
+  }
+  if (key === '@fitPages') {
+    return '<div class="layout-row"><label>压缩</label><select id="fit-n"><option value="1">1 页</option><option value="2">2 页</option><option value="3">3 页</option></select>'
+      + '<button class="btn small" data-act="fit-pages" title="逐步缩小字号、行距、间距和上下页边距，直到不超过所选页数">缩到这么多页</button></div>';
+  }
   const t = toggleDef(key);
   if (t) return '<label class="layout-check"><input type="checkbox" data-setting="' + key + '">' + t.label + '</label>';
   if (isChoiceSetting(key)) return choiceRowHTML(key);
@@ -303,12 +458,50 @@ function buildLayoutMenu() {
     .join('');
 }
 // 依赖其他开关才生效的项：前提没打开时置灰
-const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
+const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', marginMode: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
+function syncPageMarginEditor() {
+  const ed = $('#pm-editor');
+  if (!ed || !ed.querySelector) return;
+  const on = perPageMargins(store.state.settings);
+  ed.hidden = !on;
+  if (!on) return;
+  const sel = $('#pm-page');
+  const count = Math.max(1, Math.min(MAX_PAGES, lastPageCount || 1));
+  const cur = Math.min(+sel.value || 1, count);
+  sel.innerHTML = Array.from({ length: count }, (_, i) => '<option value="' + (i + 1) + '"' + (i + 1 === cur ? ' selected' : '') + '>第 ' + (i + 1) + ' 页</option>').join('');
+  const o = (store.state.settings.pageMargins || {})[cur] || {};
+  ed.querySelectorAll('[data-pm]').forEach(inp => {
+    if (inp === document.activeElement) return;
+    const k = inp.dataset.pm;
+    inp.value = clampSetting(k, o[k]) === null ? '' : String(o[k]);
+    inp.placeholder = String(settingValue(store.state.settings, k));
+  });
+}
+// 缩到 N 页：逐级收紧字号、行距、小节间距、上下页边距，用分页试排找到第一个不超过 N 页的级别，一次提交（可撤销）
+function fitToPages(n) {
+  const base = store.state.settings || {};
+  const v = k => settingValue(base, k);
+  const level = k => ({
+    fontSize: Math.max(8.5, v('fontSize') - 0.25 * k),
+    lineHeight: Math.max(1.15, Math.round((v('lineHeight') - 0.025 * k) * 1000) / 1000),
+    sectionSpacing: Math.max(4, v('sectionSpacing') - k),
+    marginTop: Math.max(8, v('marginTop') - 0.5 * k),
+    marginBottom: Math.max(8, v('marginBottom') - 0.5 * k)
+  });
+  const pagesAt = k => renderPreview(Object.assign({}, store.state, { settings: Object.assign({}, base, k ? level(k) : {}) }), { measure: true });
+  let found = -1;
+  for (let k = 0; k <= 40; k++) { if (pagesAt(k) <= n) { found = k; break; } }
+  if (found === 0) { renderPreview(store.state); showToast('已经不超过 ' + n + ' 页，无需压缩'); return; }
+  if (found < 0) { renderPreview(store.state); showToast('压到最紧仍超过 ' + n + ' 页，请删减内容'); return; }
+  store.setSettings(level(found));
+  showToast('已缩到 ' + n + ' 页（字号 ' + level(found).fontSize + 'pt，行距 ' + level(found).lineHeight + '），可撤销');
+}
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
 function syncLayoutUI() {
   const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
-  document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
+  document.querySelectorAll('#layout-pane [data-setting]').forEach(el => {
     const key = el.dataset.setting;
+    if (!key) return;
     if (LAYOUT_REQUIRES[key]) el.disabled = !toggleValue(store.state.settings, LAYOUT_REQUIRES[key]);
     if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
     if (isChoiceSetting(key)) {
@@ -320,12 +513,67 @@ function syncLayoutUI() {
     if (el === document.activeElement && el.type === 'number') return;
     el.value = fmtSetting(settingValue(store.state.settings, el.dataset.setting));
   });
+  syncPageMarginEditor();
 }
 function buildAddMenu() {
+  const tpls = getSectionTemplates();
   $('#addMenu').innerHTML = Object.keys(BLOCK_TYPES).map(k => {
     const t = BLOCK_TYPES[k];
     return '<div class="menu-item" data-act="pick-type" data-type="' + k + '">' + icon(t.icon) + t.label + '</div>';
-  }).join('');
+  }).join('')
+    + '<div class="menu-sep">栏目模板</div>'
+    + tpls.map((t, i) => '<div class="menu-item" data-act="pick-tpl" data-i="' + i + '">' + icon('grid') + escapeHTML(t.title) + '</div>').join('')
+    + '<div class="menu-item" data-act="manage-tpl">⚙ 管理栏目…</div>';
+}
+
+/* ---- 栏目模板：列表存浏览器（同自定义配色），没存过就用预设 ---- */
+const TPL_KEY = 'easy_cv.sectionTemplates';
+function sanitizeTemplates(arr) {
+  if (!Array.isArray(arr)) return null;
+  return arr.filter(t => t && typeof t.title === 'string' && t.title.trim())
+    .map(t => ({ title: t.title.trim(), en: typeof t.en === 'string' ? t.en.trim() : '', layout: CUSTOM_LAYOUTS[t.layout] ? t.layout : 'entry' }));
+}
+function getSectionTemplates() {
+  try { const v = sanitizeTemplates(JSON.parse(localStorage.getItem(TPL_KEY))); if (v) return v; } catch (e) { /* 忽略 */ }
+  return deepClone(SECTION_TEMPLATE_PRESETS);
+}
+function saveSectionTemplates(arr) {
+  try { localStorage.setItem(TPL_KEY, JSON.stringify(sanitizeTemplates(arr) || [])); } catch (e) { /* 忽略 */ }
+  buildAddMenu();
+}
+function addBlockFromTemplate(i, afterId) {
+  const t = getSectionTemplates()[i];
+  if (!t) return null;
+  const zh = (store.state.meta && store.state.meta.language) === 'zh';
+  return store.addBlock('custom', afterId, { title: zh || !t.en ? t.title : t.en, layout: t.layout });
+}
+function tplRowHTML(t) {
+  const opts = Object.keys(CUSTOM_LAYOUTS).map(k => '<option value="' + k + '"' + (k === t.layout ? ' selected' : '') + '>' + CUSTOM_LAYOUTS[k].replace(/（.*/, '') + '</option>').join('');
+  return '<div class="tpl-row"><input data-tpl="title" value="' + escapeHTML(t.title) + '" placeholder="如 实习经历">'
+    + '<input data-tpl="en" value="' + escapeHTML(t.en || '') + '" placeholder="如 Internships">'
+    + '<select data-tpl="layout">' + opts + '</select>'
+    + '<span class="blk-btn del" data-act="tpl-del" title="删除">✕</span></div>';
+}
+function openTemplates(list) {
+  $('#tpl-rows').innerHTML = (list || getSectionTemplates()).map(tplRowHTML).join('');
+  $('#sections-modal').hidden = false;
+}
+function readTemplateRows() {
+  return Array.from(document.querySelectorAll('#tpl-rows .tpl-row')).map(r => ({
+    title: r.querySelector('[data-tpl=title]').value, en: r.querySelector('[data-tpl=en]').value, layout: r.querySelector('[data-tpl=layout]').value
+  }));
+}
+
+/* ---- 转换块类型菜单 ---- */
+function buildConvertMenu(b) {
+  const items = Object.keys(BLOCK_TYPES).filter(k => k !== 'header' && k !== 'custom' && k !== b.type)
+    .map(k => '<div class="menu-item" data-act="convert-to" data-type="' + k + '">' + icon(BLOCK_TYPES[k].icon) + BLOCK_TYPES[k].label + '</div>');
+  const cur = b.type === 'custom' ? customLayout(b.data) : null;
+  for (const l of Object.keys(CUSTOM_LAYOUTS)) {
+    if (l === cur) continue;
+    items.push('<div class="menu-item" data-act="convert-to" data-type="custom" data-layout="' + l + '">' + icon('grid') + '自定义 · ' + CUSTOM_LAYOUTS[l].replace(/（.*/, '') + '</div>');
+  }
+  $('#convertMenu').innerHTML = items.join('');
 }
 function boot() {
   buildAddMenu();
@@ -336,13 +584,16 @@ function boot() {
   store.subscribe((state, kind) => {
     renderPreview(state);
     if (kind === 'structure') renderEditor();
-    if (!$('#layoutMenu').hidden) syncLayoutUI();   // 撤销/重做时面板数值跟着变
+    if (layoutPaneOpen()) syncLayoutUI();   // 撤销/重做时面板数值跟着变
     updateToolbar();
   });
   renderEditor();
   renderPreview(store.state);
   updateToolbar();
   bindEvents();
+  applyLayoutPane();
+  applyPreviewJump();
+  window.addEventListener('resize', debounce(applyZoom, 100));
 }
 
 boot();

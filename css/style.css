@@ -46,7 +46,48 @@ body {
 .btn:disabled { opacity: .4; cursor: default; }
 
 /* ============ 主布局 ============ */
-.app-body { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+.app-body { flex: 1; display: grid; grid-template-columns: 360px minmax(0, 1fr) 300px; min-height: 0; }
+.app-body.layout-collapsed { grid-template-columns: 360px minmax(0, 1fr) 0; }
+.app-body.layout-collapsed .layout-pane { display: none; }
+
+/* ============ 预览区：缩放条 + 纸张 ============ */
+.preview-wrap { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.zoom-bar {
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  padding: 6px 12px; font-size: 12px; color: var(--muted); flex: 0 0 auto;
+}
+#zoom-label { min-width: 40px; text-align: center; }
+#zoom-fit.active, #btn-jump.active { border-color: var(--accent); color: var(--accent); }
+.preview-pane.jump-on .page [data-bid] { cursor: pointer; }
+.preview-pane.jump-on .page [data-bid]:hover { outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+
+/* ---- 拖动排序 / 隐藏的块 ---- */
+.drag-handle { cursor: grab; color: #b3b9c2; font-size: 12px; letter-spacing: -2px; padding: 0 2px; user-select: none; flex: 0 0 auto; }
+.drag-handle:hover { color: var(--text); }
+.block-card.dragging, .bullet-row.dragging { opacity: .45; }
+.block-card.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.block-card.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.bullet-row.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.bullet-row.drop-after { box-shadow: 0 2px 0 var(--accent); }
+.block-head .badge { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; flex: 0 0 auto; }
+.layout-hint { font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+.page-margin-editor { border-left: 2px solid var(--border); padding-left: 8px; margin: 4px 0 6px; }
+.block-card.is-hidden .block-head > :not([data-action="visible"]) { opacity: .45; }
+.block-card.is-hidden .block-head .type { text-decoration: line-through; }
+/* 缩放用 transform：只改显示，不改排版，所以分页测量和打印都按 100% 的版面算；
+   .page-zoom 按缩放后的尺寸占位，滚动范围才对 */
+.page-zoom { margin: 0 auto; }
+.page-zoom > .page { transform-origin: top left; }
+
+/* ============ 右侧排版面板 ============ */
+.layout-pane {
+  border-left: 1px solid var(--border); background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.layout-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 4px; }
+.layout-head .pane-title { margin: 0; }
+.layout-scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 12px 12px; }
+#btn-layout.active { border-color: var(--accent); color: var(--accent); }
 
 /* ============ 编辑器面板 ============ */
 .editor-pane {
@@ -109,7 +150,9 @@ body {
 .detail-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 6px; align-items: center; } /* 首列 110px 对齐 link-row 的 select */
 .detail-row input { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 .bullets { display: flex; flex-direction: column; gap: 8px; }
-.bullet-row { position: relative; }
+.bullet-row { position: relative; display: flex; align-items: flex-start; gap: 2px; }
+.bullet-row .drag-handle { padding-top: 7px; }
+.bullet-row textarea { flex: 1 1 auto; min-width: 0; }
 .bullet-row textarea { padding-right: 30px; } /* 继承 .field textarea 样式（个人简介同款），预留 ✕ 空间 */
 .bullet-row .del { position: absolute; top: 6px; right: 6px; }
 
@@ -130,7 +173,7 @@ body {
 .add-block-btn:hover { filter: brightness(1.12); }
 
 /* ============ 预览面板 ============ */
-.preview-pane { overflow-y: auto; padding: 26px 20px; }
+.preview-pane { flex: 1 1 auto; overflow: auto; padding: 0 20px 26px; }
 .page {
   width: var(--page-w, 210mm); min-height: var(--page-h, 297mm); margin: 0 auto; background: #fff;
   box-shadow: 0 2px 14px rgba(0,0,0,.14);
@@ -170,14 +213,17 @@ body {
 .page .cv-link:hover { text-decoration: underline; }
 .page .cv-summary { margin: 9px 0 0; font-size: calc(var(--fs-base) * var(--s-body)); }
 /* ---- 照片（仅 d.showPhoto 为真时才会渲染出这些元素） ---- */
-.page .cv-header.has-photo { display: flex; gap: 8mm; align-items: flex-start; }
-.page .cv-header-main { flex: 1 1 auto; min-width: 0; } /* min-width:0 让长 URL 能换行而不撑破 flex */
+.page .cv-header.has-photo {
+  /* 照片完全不占排版空间：叠在头部右上角（头部靠右时在左上角）。头部文字的位置、换行、高度都和不放照片时一样，
+     正文也不会被挤下去；照片大或文字行长时照片会盖住重叠的部分，用「照片左右 / 上下」挪开 */
+  position: relative;
+}
+.page .cv-header-main { min-width: 0; }
 .page .cv-photo {
-  flex: 0 0 auto;
-  width: 30mm; height: 40mm;    /* 3:4；A4 正文宽 180mm 的 1/6 */
+  position: absolute; top: var(--photo-dy, 0px); right: calc(-1 * var(--photo-dx, 0px));   /* 排版面板「照片左右/上下」：正值向右 / 向下 */
+  width: var(--photo-w, 30mm); height: calc(var(--photo-w, 30mm) * var(--photo-hr, 4 / 3));   /* 默认 30×40mm（3:4）；排版面板「头部」可改宽度和比例 */
   object-fit: cover;            /* 自动居中裁切，不失真 */
   border-radius: 2px;
-  position: relative; left: var(--photo-dx, 0px); top: var(--photo-dy, 0px);   /* 排版面板「照片左右/上下」，不影响其他元素位置 */
 }
 /* 占位框 = 「你忘了放照片」的报错信号，照常打印（刻意不做 @media print 隐藏） */
 .page .cv-photo-empty {
@@ -209,14 +255,19 @@ body {
 .page .skill-level { color: #555; }
 .page .custom-block { margin-bottom: 9px; }
 .page .custom-body p { margin: 4px 0; }
+.page .custom-text { margin: 2px 0; font-size: calc(var(--fs-base) * var(--s-body)); }
 /* ---- 排版面板「样式」开关（state.settings 里改过才会加这些 class） ---- */
 .page.no-contact-icons .cv-contact .ic, .page.no-contact-icons .cv-link .ic { display: none; }
 .page.accent-divider h2.section-title { border-bottom-color: var(--accent); }
 /* 每个技能块是一行；双栏 = 行改成半宽 inline-block，两两并排，小节标题（块级）自然断开 */
 .page.header-center .cv-header { text-align: center; }
 .page.header-center .cv-details, .page.header-center .cv-contact, .page.header-center .cv-links { justify-content: center; }
+.page.header-right .cv-header { text-align: right; }
+.page.header-right .cv-details, .page.header-right .cv-contact, .page.header-right .cv-links { justify-content: flex-end; }
+.page.header-right .cv-photo { right: auto; left: var(--photo-dx, 0px); }   /* 头部靠右：照片换到左上角 */
 /* ---- 分页预览（render.js 的 paginatePreview 插入 .page-gap / .page-filler） ---- */
 .page.paged { min-height: 0; }   /* 末页由 .page-filler 补齐 */
+/* 每页单独页边距：.pg 是一页的容器（render.js 插入），预览里的左右外边距在行内样式里；打印时清零，由 @page pN 负责 */
 .page-gap {
   position: relative;
   background: linear-gradient(#fff 0 var(--gap-a), var(--bg) var(--gap-a) var(--gap-b), #fff var(--gap-b));
@@ -234,16 +285,25 @@ body {
   @bottom-center { content: counter(page) " / " counter(pages); color: #666; font-size: 9pt; }
 }
 @media print {
-  .toolbar, .editor-pane, .modal-mask, .menu { display: none !important; }
+  .toolbar, .editor-pane, .modal-mask, .menu, #toast { display: none !important; }
   body { background: #fff; height: auto; }
   #app { height: auto; }
   .app-body { display: block; }
   .preview-pane { padding: 0; overflow: visible; }
+  .zoom-bar, .layout-pane { display: none !important; }
+  .preview-wrap { display: block; }
+  .page-zoom { width: auto !important; height: auto !important; }
+  .page-zoom > .page { transform: none !important; }
   .page { width: auto; min-height: 0; box-shadow: none; padding: 0; margin: 0; }
   .page-gap { height: 0 !important; margin: 0 !important; background: none; break-before: page; page-break-before: always; }
   .page-gap::after, .page-filler { display: none; }
+  .pg { margin-left: 0 !important; margin-right: 0 !important; }
   .page .entry, .page .skill-row, .page .cv-link, .page .ptag, .page .custom-block, .page .cv-header { break-inside: avoid; page-break-inside: avoid; }
   .page p { orphans: 3; widows: 3; }
+  /* 允许跨页的块：块本身可断开，但只在要点 / 段落之间断，条目头部不和第一条内容分开 */
+  .page [data-break], .page [data-break] .entry { break-inside: auto; page-break-inside: auto; }
+  .page [data-break] li, .page [data-break] p, .page [data-break] .entry-head, .page [data-break] .org { break-inside: avoid; page-break-inside: avoid; }
+  .page [data-break] .entry-head, .page [data-break] .org { break-after: avoid; page-break-after: avoid; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
@@ -262,6 +322,15 @@ body {
 .modal { background: #fff; border-radius: 12px; padding: 18px; min-width: 300px; max-width: 90vw; max-height: 86vh; overflow-y: auto; }
 .modal h3 { margin: 0 0 12px; font-size: 15px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; max-width: 520px; }
+#convertMenu { z-index: 160; }   /* 子菜单盖在块菜单之上 */
+.menu-sep { font-size: 11px; color: var(--muted); padding: 6px 10px 2px; border-top: 1px solid var(--border); margin-top: 4px; }
+.section-title-grid { display: grid; grid-template-columns: 70px 1fr; gap: 6px 8px; align-items: center; font-size: 13px; }
+.section-title-grid input { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 13px; }
+.tpl-head, .tpl-row { display: grid; grid-template-columns: 1fr 1fr 150px 24px; gap: 6px; align-items: center; }
+.tpl-head { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.tpl-row { margin-bottom: 6px; }
+.tpl-row input, .tpl-row select { padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 13px; min-width: 0; }
 
 /* ============ 配色菜单 ============ */
 #colorMenu { min-width: 250px; }
@@ -290,7 +359,6 @@ body {
 .color-current code { font-family: ui-monospace, Consolas, monospace; color: var(--text); }
 
 /* ============ 排版面板 ============ */
-#layoutMenu { width: 300px; max-height: 80vh; overflow-y: auto; padding: 6px 12px 10px; }
 .layout-group { font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
 .layout-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
 .layout-row > label { flex: 0 0 64px; }

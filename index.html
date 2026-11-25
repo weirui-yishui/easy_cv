@@ -5,7 +5,8 @@
 <title>Easy CV</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
-<style id="cv-page-style"></style><!-- 打印页边距，由 render.js 按 state.settings 写入 -->
+<style id="cv-page-style"></style><!-- 打印纸张 / 页边距 / 页码，由 render.js 按 state.settings 写入 -->
+<style id="cv-page-names"></style><!-- 每页单独页边距的 @page pN，由分页预览写入 -->
 </head>
 <body>
 <div id="app">
@@ -16,7 +17,7 @@
     <span class="sep"></span>
     <button class="btn" data-act="dd-theme" id="btn-theme" title="主题">主题 ▾</button>
     <button class="btn" data-act="dd-color" id="btn-color" title="配色">配色 ▾</button>
-    <button class="btn" data-act="dd-layout" id="btn-layout" title="字号、行距、页边距">排版 ▾</button>
+    <button class="btn" data-act="toggle-layout" id="btn-layout" title="显示 / 收起右侧排版面板">排版</button>
     <button class="btn" data-act="dd-settings" id="btn-settings" title="设置">⚙ 设置</button>
     <span class="spacer"></span>
     <span class="save-target" id="save-target" title="Ctrl+S 保存位置"></span>
@@ -34,7 +35,28 @@
       <button class="add-block-btn" data-act="add-block" title="添加块">+</button>
     </aside>
 
-    <main class="preview-pane" id="preview-pane"></main>
+    <section class="preview-wrap">
+      <div class="zoom-bar">
+        <button class="btn small" data-act="toggle-jump" id="btn-jump" title="开启后，点击预览里的条目会在左侧定位到对应的块">点击定位</button>
+        <span class="spacer"></span>
+        <button class="btn small" data-act="zoom-out" title="缩小">−</button>
+        <span id="zoom-label">100%</span>
+        <button class="btn small" data-act="zoom-in" title="放大">+</button>
+        <button class="btn small" data-act="zoom-fit" id="zoom-fit" title="按窗口宽度缩放（最大 100%）">适应宽度</button>
+      </div>
+      <main class="preview-pane" id="preview-pane"></main>
+    </section>
+
+    <aside class="layout-pane" id="layout-pane">
+      <div class="layout-head">
+        <span class="pane-title">排版</span>
+        <button class="blk-btn" data-act="toggle-layout" title="收起">»</button>
+      </div>
+      <div class="layout-scroll">
+        <div id="layout-rows"></div>
+        <div class="layout-actions"><button class="btn small" data-act="layout-reset">恢复默认</button></div>
+      </div>
+    </aside>
   </div>
 </div>
 
@@ -52,18 +74,17 @@
   <div class="menu-item" data-act="accent-random">🎲 随机配色</div>
   <div class="color-current"><span>当前色号</span><code id="accent-current">#1a3a5c</code></div>
 </div>
-<div class="menu" id="layoutMenu" hidden>
-  <div id="layout-rows"></div>
-  <div class="layout-actions"><button class="btn small" data-act="layout-reset">恢复默认</button></div>
-</div>
 <div class="menu" id="swatchMenu" hidden>
   <div class="menu-item" data-act="swatch-edit">✎ 修改颜色</div>
   <div class="menu-item danger" data-act="swatch-del">✕ 删除</div>
 </div>
 <div class="menu" id="addMenu" hidden></div>
+<div class="menu" id="convertMenu" hidden></div>
 <div class="menu" id="blockMenu" hidden>
   <div class="menu-item" data-act="menu-insert">+ 在此后插入</div>
   <div class="menu-item" data-act="menu-dup">⧉ 复制</div>
+  <div class="menu-item" data-act="menu-convert" id="menu-convert">⇄ 转换为…</div>
+  <div class="menu-item" data-act="menu-break" id="menu-break">☐ 允许跨页</div>
   <div class="menu-item danger" data-act="menu-del">✕ 删除</div>
 </div>
 
@@ -75,6 +96,8 @@
       <select id="set-datefmt">
         <option value="MMM YYYY">2022-06 → Jun 2022</option>
         <option value="YYYY-MM">2022-06 → 2022-06</option>
+        <option value="YYYY.MM">2022-06 → 2022.06</option>
+        <option value="YYYY年M月">2022-06 → 2022年6月</option>
       </select>
     </div>
     <div class="field">
@@ -84,9 +107,28 @@
         <option value="zh">中文（教育经历 / 工作经历 …）</option>
       </select>
     </div>
+    <div class="field">
+      <label>小节标题（留空 = 按语言自动）</label>
+      <div class="section-title-grid" id="set-section-titles"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn primary" data-act="save-settings">保存</button>
       <button class="btn" data-act="close-settings">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="sections-modal" hidden>
+  <div class="modal">
+    <h3>管理栏目</h3>
+    <p class="modal-hint">这里的栏目会出现在「+」菜单里，新建时自动填好小节标题和版式。列表只保存在本浏览器；删掉栏目不影响已经写好的内容。</p>
+    <div class="tpl-head"><span>中文标题</span><span>英文标题（可选）</span><span>版式</span><span></span></div>
+    <div id="tpl-rows"></div>
+    <button class="btn small" data-act="tpl-add">+ 添加栏目</button>
+    <div class="modal-actions">
+      <button class="btn" data-act="tpl-reset" style="margin-right:auto">恢复预设</button>
+      <button class="btn primary" data-act="tpl-save">保存</button>
+      <button class="btn" data-act="tpl-close">取消</button>
     </div>
   </div>
 </div>

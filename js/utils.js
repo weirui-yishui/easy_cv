@@ -58,6 +58,8 @@ function fmtDate(ym, fmt) {
   if (!p[0]) return '';
   if (!p[1]) return p[0];
   if (fmt === 'YYYY-MM') return p[0] + '-' + p[1];
+  if (fmt === 'YYYY.MM') return p[0] + '.' + p[1];
+  if (fmt === 'YYYY年M月') return p[0] + '年' + (parseInt(p[1], 10) || p[1]) + '月';
   const mi = parseInt(p[1], 10) - 1;
   return (MONTHS[mi] || p[1]) + ' ' + p[0];
 }
@@ -165,4 +167,18 @@ function migrateBlock(b) {
     d.highlights = lines.filter(s => s.startsWith('- ')).map(s => s.slice(2));
     delete d.subtitle; delete d.rightText; delete d.columns; delete d.body;
   }
+}
+
+/* ---- Ctrl/⌘+B：给选区加 / 去 **加粗** ----
+ * 纯函数，返回新的 { value, start, end }（选区仍框住原文字）。
+ * 已加粗（选区本身以 ** 包着，或选区两侧紧挨着 **）→ 去掉；否则加上。没选中文字时插入 **** 并把光标放中间。 */
+function toggleBoldMarkup(value, start, end) {
+  const sel = value.slice(start, end);
+  if (sel.length >= 4 && sel.startsWith('**') && sel.endsWith('**')) {
+    return { value: value.slice(0, start) + sel.slice(2, -2) + value.slice(end), start, end: end - 4 };
+  }
+  if (value.slice(start - 2, start) === '**' && value.slice(end, end + 2) === '**') {
+    return { value: value.slice(0, start - 2) + sel + value.slice(end + 2), start: start - 2, end: end - 2 };
+  }
+  return { value: value.slice(0, start) + '**' + sel + '**' + value.slice(end), start: start + 2, end: end + 2 };
 }

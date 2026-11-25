@@ -555,7 +555,7 @@ const tests = `
   store.resetSettings();
 
   // 面板：每个键都能生成一行，PANEL_LAYOUT 不漏项、不重复
-  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys);
+  const panelKeys = PANEL_LAYOUT.flatMap(g => g.keys).filter(k => k[0] !== '@');   // @ 开头是面板里的组件（每页页边距、缩到 N 页），不是设置项
   const allKeys = LAYOUT_SETTINGS.map(d => d.key).concat(Object.keys(CHOICE_SETTINGS), TOGGLE_SETTINGS.map(t => t.key));
   assert(panelKeys.length === new Set(panelKeys).size, '面板键不重复');
   assert(allKeys.every(k => panelKeys.includes(k)) && panelKeys.every(k => allKeys.includes(k)), '面板覆盖全部设置项');
@@ -686,6 +686,46 @@ const tests = `
   store.setSetting('photoWidth', 200);
   assert(store.state.settings.photoWidth === 60, '照片宽度钳到 60mm');
   store.resetSettings();
+
+  // 22. 允许跨页 / 每页单独页边距 / 一次写入多项设置
+  store.setState(deepClone(SAMPLE));
+  const ab = store.state.blocks.find(b => b.type === 'research');
+  store.toggleAllowBreak(ab.id);
+  assert(store.state.blocks.find(b => b.id === ab.id).allowBreak === true, '开启允许跨页');
+  assert(els['#preview-pane'].innerHTML.includes('data-bid="' + ab.id + '" data-break="1"'), '预览元素带 data-break');
+  assert(blockCardHTML(store.state.blocks.find(b => b.id === ab.id)).includes('可跨页'), '编辑器卡片显示「可跨页」');
+  store.toggleAllowBreak(ab.id);
+  assert(!('allowBreak' in store.state.blocks.find(b => b.id === ab.id)), '关闭时删除该键');
+  store.toggleAllowBreak(store.state.blocks[0].id);
+  assert(!store.state.blocks[0].allowBreak, '个人信息不能设为跨页');
+
+  // 每页单独页边距：只有「每页单独 + 分页预览」都开时生效
+  const sPM = { marginTop: 12, marginMode: 'perPage', pageMargins: { 2: { marginTop: 25, marginLeft: 'x', marginRight: 99 } } };
+  assert(pageMarginsFor(sPM, 2).marginTop === 12, '没开分页预览：每页单独不生效');
+  sPM.pagedPreview = true;
+  const m2 = pageMarginsFor(sPM, 2);
+  assert(m2.marginTop === 25 && m2.marginLeft === 15 && m2.marginRight === 30 && m2.marginBottom === 18, '第 2 页：覆盖的边生效、非法值回落、超限钳位、其余沿用统一值');
+  assert(pageMarginsFor(sPM, 3).marginTop === 12 && pageMarginsFor(sPM, null).marginTop === 12, '没设的页 / 统一值');
+  assert(namedPagesCSS(sPM, 2) === '@page p1 { margin: 12mm 15mm 18mm 15mm; } @page p2 { margin: 25mm 30mm 18mm 15mm; }', '具名页面 CSS');
+  assert(namedPagesCSS({ marginMode: 'perPage' }, 2) === '', '没开分页预览：不输出具名页面');
+
+  store.setSetting('pagedPreview', true);
+  store.setSetting('marginMode', 'perPage');
+  assert(els['#preview-pane'].innerHTML.includes('per-page'), '.page 加 per-page');
+  assert(store.setPageMargin(2, 'marginTop', 22) && store.state.settings.pageMargins[2].marginTop === 22, 'setPageMargin 写入');
+  store.setPageMargin(2, 'marginTop', 23);
+  store.undo();
+  assert(!store.state.settings.pageMargins, '同一页同一边连续修改合并为一步撤销（22、23 一起撤掉）');
+  store.setPageMargin(2, 'marginTop', 22);
+  store.setPageMargin(2, 'marginTop', '');
+  assert(!('pageMargins' in store.state.settings), '清空最后一项 → 删除 pageMargins');
+  assert(store.setPageMargin(0, 'marginTop', 10) === false && store.setPageMargin(2, 'nope', 10) === false && store.setPageMargin(2, 'marginTop', 'abc') === false, '非法页码 / 键 / 值拒绝');
+  store.resetSettings();
+
+  store.setSettings({ fontSize: 9.5, lineHeight: 1.3, sectionSpacing: 'x' });
+  assert(store.state.settings.fontSize === 9.5 && store.state.settings.lineHeight === 1.3 && !('sectionSpacing' in store.state.settings), 'setSettings 一次写入多项，非法值跳过');
+  store.undo();
+  assert(!store.state.settings || !('fontSize' in store.state.settings), 'setSettings 一步撤销');
 
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });

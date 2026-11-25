@@ -69,6 +69,9 @@ body {
 .block-card.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .bullet-row.drop-before { box-shadow: 0 -2px 0 var(--accent); }
 .bullet-row.drop-after { box-shadow: 0 2px 0 var(--accent); }
+.block-head .badge { font-size: 11px; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; white-space: nowrap; flex: 0 0 auto; }
+.layout-hint { font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+.page-margin-editor { border-left: 2px solid var(--border); padding-left: 8px; margin: 4px 0 6px; }
 .block-card.is-hidden .block-head > :not([data-action="visible"]) { opacity: .45; }
 .block-card.is-hidden .block-head .type { text-decoration: line-through; }
 /* 缩放用 transform：只改显示，不改排版，所以分页测量和打印都按 100% 的版面算；
@@ -258,6 +261,7 @@ body {
 .page.header-center .cv-details, .page.header-center .cv-contact, .page.header-center .cv-links { justify-content: center; }
 /* ---- 分页预览（render.js 的 paginatePreview 插入 .page-gap / .page-filler） ---- */
 .page.paged { min-height: 0; }   /* 末页由 .page-filler 补齐 */
+/* 每页单独页边距：.pg 是一页的容器（render.js 插入），预览里的左右外边距在行内样式里；打印时清零，由 @page pN 负责 */
 .page-gap {
   position: relative;
   background: linear-gradient(#fff 0 var(--gap-a), var(--bg) var(--gap-a) var(--gap-b), #fff var(--gap-b));
@@ -275,7 +279,7 @@ body {
   @bottom-center { content: counter(page) " / " counter(pages); color: #666; font-size: 9pt; }
 }
 @media print {
-  .toolbar, .editor-pane, .modal-mask, .menu { display: none !important; }
+  .toolbar, .editor-pane, .modal-mask, .menu, #toast { display: none !important; }
   body { background: #fff; height: auto; }
   #app { height: auto; }
   .app-body { display: block; }
@@ -287,8 +291,13 @@ body {
   .page { width: auto; min-height: 0; box-shadow: none; padding: 0; margin: 0; }
   .page-gap { height: 0 !important; margin: 0 !important; background: none; break-before: page; page-break-before: always; }
   .page-gap::after, .page-filler { display: none; }
+  .pg { margin-left: 0 !important; margin-right: 0 !important; }
   .page .entry, .page .skill-row, .page .cv-link, .page .ptag, .page .custom-block, .page .cv-header { break-inside: avoid; page-break-inside: avoid; }
   .page p { orphans: 3; widows: 3; }
+  /* 允许跨页的块：块本身可断开，但只在要点 / 段落之间断，条目头部不和第一条内容分开 */
+  .page [data-break], .page [data-break] .entry { break-inside: auto; page-break-inside: auto; }
+  .page [data-break] li, .page [data-break] p, .page [data-break] .entry-head, .page [data-break] .org { break-inside: avoid; page-break-inside: avoid; }
+  .page [data-break] .entry-head, .page [data-break] .org { break-after: avoid; page-break-after: avoid; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 

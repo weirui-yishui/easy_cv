@@ -96,6 +96,7 @@ function blockCardHTML(b) {
     + icon(iconName, 'blk-icon')
     + '<span class="type">' + escapeHTML(label) + '</span>'
     + (sum ? '<span class="meta">' + escapeHTML(sum) + '</span>' : '')
+    + (b.allowBreak && b.type !== 'header' ? '<span class="badge" title="打印 / 分页时允许在要点之间断开">可跨页</span>' : '')
     + '<span class="spacer"></span>'
     + '<span class="blk-btn" data-action="visible" title="' + (hidden ? '已隐藏：预览和打印中不显示，点击显示' : '在预览和打印中隐藏') + '">' + (hidden ? '◌' : '◉') + '</span>'
     + '<span class="blk-btn" data-action="up" title="上移">↑</span>'

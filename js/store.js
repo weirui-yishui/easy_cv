@@ -221,6 +221,34 @@ class StateStore {
     this.commit('settings:' + key, 'data');
     return true;
   }
+  // 一次写入多项（「缩到 N 页」用）：合成一步撤销
+  setSettings(obj) {
+    const s = Object.assign({}, this.state.settings);
+    for (const k of Object.keys(obj)) { const v = clampSetting(k, obj[k]); if (v !== null) s[k] = v; }
+    this.state.settings = s;
+    this.commit(null, 'data');
+  }
+  // 每页单独页边距：value 为 '' / null = 清除该页这一边（回到统一值）
+  setPageMargin(n, key, value) {
+    n = Number(n);
+    if (!MARGIN_KEYS.includes(key) || !Number.isInteger(n) || n < 1 || n > MAX_PAGES) return false;
+    let v = null;
+    if (value !== '' && value != null) { v = clampSetting(key, value); if (v === null) return false; }
+    const s = this.state.settings = this.state.settings || {};
+    const pm = Object.assign({}, s.pageMargins);
+    const cur = Object.assign({}, pm[n]);
+    if (v === null) delete cur[key]; else cur[key] = v;
+    if (Object.keys(cur).length) pm[n] = cur; else delete pm[n];
+    if (Object.keys(pm).length) s.pageMargins = pm; else delete s.pageMargins;
+    this.commit('pm:' + n + ':' + key, 'data');
+    return true;
+  }
+  toggleAllowBreak(id) {
+    const b = this.state.blocks.find(x => x.id === id);
+    if (!b || b.type === 'header') return;
+    if (b.allowBreak) delete b.allowBreak; else b.allowBreak = true;
+    this.commit(null, 'structure');
+  }
   resetSettings() {
     delete this.state.settings;
     this.commit(null, 'data');

@@ -5,7 +5,8 @@
 <title>Easy CV</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="css/style.css">
-<style id="cv-page-style"></style><!-- 打印页边距，由 render.js 按 state.settings 写入 -->
+<style id="cv-page-style"></style><!-- 打印纸张 / 页边距 / 页码，由 render.js 按 state.settings 写入 -->
+<style id="cv-page-names"></style><!-- 每页单独页边距的 @page pN，由分页预览写入 -->
 </head>
 <body>
 <div id="app">
@@ -83,6 +84,7 @@
   <div class="menu-item" data-act="menu-insert">+ 在此后插入</div>
   <div class="menu-item" data-act="menu-dup">⧉ 复制</div>
   <div class="menu-item" data-act="menu-convert" id="menu-convert">⇄ 转换为…</div>
+  <div class="menu-item" data-act="menu-break" id="menu-break">☐ 允许跨页</div>
   <div class="menu-item danger" data-act="menu-del">✕ 删除</div>
 </div>
 

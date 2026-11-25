@@ -28,6 +28,8 @@ function bindEvents() {
         menuBlockId = id;
         const b = store.state.blocks.find(x => x.id === id);
         $('#menu-convert').hidden = !b || b.type === 'header';
+        $('#menu-break').hidden = !b || b.type === 'header';
+        $('#menu-break').textContent = (b && b.allowBreak ? '☑' : '☐') + ' 允许跨页（在要点之间断开）';
         showMenu($('#blockMenu'), a.getBoundingClientRect());
         break;
       }
@@ -182,6 +184,7 @@ function bindEvents() {
       }
       case 'menu-insert': addMenuAfterId = menuBlockId; showMenu($('#addMenu'), p.getBoundingClientRect()); break;
       case 'menu-dup': { const nid = store.duplicateBlock(menuBlockId); hideMenus(); focusBlock(nid); break; }
+      case 'menu-break': store.toggleAllowBreak(menuBlockId); hideMenus(); break;
       case 'menu-convert': {
         const b = store.state.blocks.find(x => x.id === menuBlockId);
         if (!b || b.type === 'header') break;
@@ -220,6 +223,8 @@ function bindEvents() {
       case 'zoom-out': stepZoom(-1); break;
       case 'zoom-fit': setZoomPref('fit'); break;
       case 'toggle-jump': setPreviewJump(!previewJumpOn()); break;
+      case 'fit-pages': fitToPages(+$('#fit-n').value); break;
+      case 'pm-clear': MARGIN_KEYS.forEach(k => store.setPageMargin(+$('#pm-page').value, k, '')); syncLayoutUI(); break;
       case 'layout-reset': store.resetSettings(); syncLayoutUI(); showToast('排版已恢复默认'); break;
       case 'dd-settings': openSettings(); break;
       case 'save-settings': saveSettings(); break;
@@ -245,6 +250,8 @@ function bindEvents() {
 
   // 排版面板：滑块和数字框都实时生效，并互相同步
   $('#layout-pane').addEventListener('input', e => {
+    if (e.target.dataset.pm) { store.setPageMargin(+$('#pm-page').value, e.target.dataset.pm, e.target.value); return; }
+    if (e.target.id === 'pm-page') { syncLayoutUI(); return; }
     const key = e.target.dataset.setting;
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     if (!key || !store.setSetting(key, value)) return;
@@ -418,6 +425,20 @@ function choiceRowHTML(key) {
     + '</select></div>';
 }
 function layoutRowHTML(key) {
+  if (key === '@pageMargins') {
+    // 每页单独页边距的编辑区：选页码，四边留空 = 沿用上面的统一值
+    return '<div class="page-margin-editor" id="pm-editor">'
+      + '<div class="layout-row"><label>第几页</label><select id="pm-page"></select>'
+      + '<button class="btn small" data-act="pm-clear" title="本页四边都回到统一值">清除本页</button></div>'
+      + MARGIN_KEYS.map(k => '<div class="layout-row"><label>' + layoutDef(k).label + '</label>'
+        + '<input type="number" data-pm="' + k + '" min="' + layoutDef(k).min + '" max="' + layoutDef(k).max + '" step="1">'
+        + '<span class="unit">mm</span></div>').join('')
+      + '<p class="layout-hint">留空 = 沿用上面的统一页边距。</p></div>';
+  }
+  if (key === '@fitPages') {
+    return '<div class="layout-row"><label>压缩</label><select id="fit-n"><option value="1">1 页</option><option value="2">2 页</option><option value="3">3 页</option></select>'
+      + '<button class="btn small" data-act="fit-pages" title="逐步缩小字号、行距、间距和上下页边距，直到不超过所选页数">缩到这么多页</button></div>';
+  }
   const t = toggleDef(key);
   if (t) return '<label class="layout-check"><input type="checkbox" data-setting="' + key + '">' + t.label + '</label>';
   if (isChoiceSetting(key)) return choiceRowHTML(key);
@@ -434,12 +455,50 @@ function buildLayoutMenu() {
     .join('');
 }
 // 依赖其他开关才生效的项：前提没打开时置灰
-const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
+const LAYOUT_REQUIRES = { repeatSectionTitles: 'pagedPreview', marginMode: 'pagedPreview', pageNumberPosition: 'showPageNumbers', pageNumberFormat: 'showPageNumbers' };
+function syncPageMarginEditor() {
+  const ed = $('#pm-editor');
+  if (!ed || !ed.querySelector) return;
+  const on = perPageMargins(store.state.settings);
+  ed.hidden = !on;
+  if (!on) return;
+  const sel = $('#pm-page');
+  const count = Math.max(1, Math.min(MAX_PAGES, lastPageCount || 1));
+  const cur = Math.min(+sel.value || 1, count);
+  sel.innerHTML = Array.from({ length: count }, (_, i) => '<option value="' + (i + 1) + '"' + (i + 1 === cur ? ' selected' : '') + '>第 ' + (i + 1) + ' 页</option>').join('');
+  const o = (store.state.settings.pageMargins || {})[cur] || {};
+  ed.querySelectorAll('[data-pm]').forEach(inp => {
+    if (inp === document.activeElement) return;
+    const k = inp.dataset.pm;
+    inp.value = clampSetting(k, o[k]) === null ? '' : String(o[k]);
+    inp.placeholder = String(settingValue(store.state.settings, k));
+  });
+}
+// 缩到 N 页：逐级收紧字号、行距、小节间距、上下页边距，用分页试排找到第一个不超过 N 页的级别，一次提交（可撤销）
+function fitToPages(n) {
+  const base = store.state.settings || {};
+  const v = k => settingValue(base, k);
+  const level = k => ({
+    fontSize: Math.max(8.5, v('fontSize') - 0.25 * k),
+    lineHeight: Math.max(1.15, Math.round((v('lineHeight') - 0.025 * k) * 1000) / 1000),
+    sectionSpacing: Math.max(4, v('sectionSpacing') - k),
+    marginTop: Math.max(8, v('marginTop') - 0.5 * k),
+    marginBottom: Math.max(8, v('marginBottom') - 0.5 * k)
+  });
+  const pagesAt = k => renderPreview(Object.assign({}, store.state, { settings: Object.assign({}, base, k ? level(k) : {}) }), { measure: true });
+  let found = -1;
+  for (let k = 0; k <= 40; k++) { if (pagesAt(k) <= n) { found = k; break; } }
+  if (found === 0) { renderPreview(store.state); showToast('已经不超过 ' + n + ' 页，无需压缩'); return; }
+  if (found < 0) { renderPreview(store.state); showToast('压到最紧仍超过 ' + n + ' 页，请删减内容'); return; }
+  store.setSettings(level(found));
+  showToast('已缩到 ' + n + ' 页（字号 ' + level(found).fontSize + 'pt，行距 ' + level(found).lineHeight + '），可撤销');
+}
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
 function syncLayoutUI() {
   const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
   document.querySelectorAll('#layout-pane [data-setting]').forEach(el => {
     const key = el.dataset.setting;
+    if (!key) return;
     if (LAYOUT_REQUIRES[key]) el.disabled = !toggleValue(store.state.settings, LAYOUT_REQUIRES[key]);
     if (toggleDef(key)) { el.checked = toggleValue(store.state.settings, key); return; }
     if (isChoiceSetting(key)) {
@@ -451,6 +510,7 @@ function syncLayoutUI() {
     if (el === document.activeElement && el.type === 'number') return;
     el.value = fmtSetting(settingValue(store.state.settings, el.dataset.setting));
   });
+  syncPageMarginEditor();
 }
 function buildAddMenu() {
   const tpls = getSectionTemplates();

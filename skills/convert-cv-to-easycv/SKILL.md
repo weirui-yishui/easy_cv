@@ -55,6 +55,7 @@ Easy CV 的 JSON 格式由项目根目录的 **`CV_JSON_SPEC.md`** 权威定义�
    }
    ```
    `theme` 可选 `classic`（衬线）或 `modern`（无衬线），决定默认字体；`accent` 为主题色 `#RRGGBB`。
+   - **`meta.dateFormat` 跟随源简历的写法**：`Sep 2024` → `"MMM YYYY"`，`2024-09` → `"YYYY-MM"`，`2024.09` → `"YYYY.MM"`，`2024年9月` → `"YYYY年M月"`。数据里的日期仍一律存 `"YYYY-MM"`，这里只决定显示格式。中文简历同时设 `meta.language: "zh"`（小节标题和「至今」用中文）。
    - **排版 `settings`（可选，默认不写）**：字号、行距、页边距、中西文字体、项目符号、分页、页码等，字段和取值范围见 `CV_JSON_SPEC.md` §1.1。
      - 只有源文件**明确给出**排版数值时才填，典型情况是源文件是其他简历编辑器导出的 JSON（带 `fontSize` / `lineHeight` / `margin*` 之类的设置）。PDF / Word 里目测出来的字号、边距不要填，用默认值，用户导入后在右侧「排版」面板里调。
      - 换算单位：`fontSize` 是 pt（源里是 px 时 × 0.75），页边距是 mm，分块字号是相对 `fontSize` 的倍率。单位拿不准就不填，并在交付说明里列出没迁移的设置。

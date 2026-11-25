@@ -256,7 +256,7 @@
 1. **日期**一定是 `"YYYY-MM"` 字符串（如 `"2022-06"`）；`current=true` 时 `endDate` 写空字符串 `""`。
 2. `bullets` / `list` / `tags` 都是字符串数组；空就写 `[]`。
 3. `links` 必须每项有 `id`、`icon`、`url`。
-4. 布尔字段 `current`、`showLevel`、`visible` 为 `true`/`false`。
+4. 布尔字段 `current`、`visible` 为 `true`/`false`。
 5. 不要把 `custom` 的 `body` 写成 HTML——只用它的轻量标记语法。
 
 ## 5. 用 JSON Patch 修改数据（AI 编辑方式）
@@ -297,7 +297,7 @@ Patch 的**路径根是应用 JSON 对象本身**，一次提交一个 patch 数
     "value": {
       "id": "b_x1k2",
       "type": "skills",
-      "data": { "name": "Tools", "keywords": ["Git", "Docker"], "level": "", "showLevel": false },
+      "data": { "name": "Tools", "keywords": ["Git", "Docker"] },
       "visible": true
     }
   }

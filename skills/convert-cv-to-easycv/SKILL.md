@@ -58,7 +58,7 @@ Easy CV 的 JSON 格式由项目根目录的 **`CV_JSON_SPEC.md`** 权威定义�
 - **日期**一律 `"YYYY-MM"`；`current: true` 时 `endDate` 留空字符串 `""`。
 - `highlights` / `keywords` / `courses` 是**字符串数组**。
 - `links` 每项必须有 `id`、`label`（可空）、`icon`（枚举见规范）、`url`。
-- 布尔字段 `current` / `showLevel` / `visible` 为 `true`/`false`。
+- 布尔字段 `current` / `visible` 为 `true`/`false`。
 - 每个块要有唯一 `id`（`b_` + 随机），链接 `id`（`l_` + 随机）。
 
 ## 规则

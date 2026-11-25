@@ -29,7 +29,7 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `schemaVersion` | number | 固定 `1` |
-| `theme` | string | `"classic"`（衬线）/ `"modern"`（无衬线）——只决定字体 |
+| `theme` | string | `"classic"`（衬线）/ `"modern"`（无衬线）——只决定默认字体；`settings.latinFont` / `cjkFont` 设置后覆盖它 |
 | `accent` | string | 主题色，存为 `#RRGGBB`；解析器也接受 `#RGB`、`rgb(r,g,b)`（整数或百分比），统一归一化为 hex；独立于字体 |
 | `meta.dateFormat` | string | `"MMM YYYY"`（显示 `Jun 2022`）或 `"YYYY-MM"`（显示 `2022-06`） |
 | `meta.language` | string | 可选，`"en"`（默认）或 `"zh"`。决定自动小节标题：`en`→Education / Work Experience / Research Experience / Projects / Skills；`zh`→教育经历 / 工作经历 / 研究经历 / 项目 / 技能；`current=true` 的结束时间也显示「至今」（`en` 为 Present）。`custom` 块标题始终用 `title` 字段原文，不受此影响 |
@@ -38,7 +38,20 @@
 
 ### 1.1 `settings` —— 排版设置（工具栏「排版 ▾」）
 
-所有字段可选，都是**数字**；只写想改的项，没写的用默认值。超出范围的值钳到边界，非数字的值忽略。
+所有字段可选，只写想改的项，没写的用默认值。
+
+**字体**（字符串，取值必须是下表的键，否则忽略；不写 = 跟随 `theme`）
+
+| 字段 | 可选值 | 跟随主题时 |
+|---|---|---|
+| `latinFont` | `georgia` / `times` / `garamond` / `palatino` / `arial` / `calibri` / `system` | `classic`→`georgia`，`modern`→`arial` |
+| `cjkFont` | `song`（宋体）/ `hei`（黑体）/ `kai`（楷体）/ `fangsong`（仿宋） | `classic`→`song`，`modern`→`hei` |
+
+- 西文字体排在前面、中文字体排在后面：英文和数字用西文字体，汉字自动落到中文字体。
+- 只写其中一个时，另一个取当前 `theme` 的默认值。
+- 都是系统字体，每个选项列了 Windows / macOS / Linux 上的同类字体；电脑上一个都没装时浏览器会换成别的字体（例如 Garamond、Calibri 在 macOS 上通常没有）。打印出的 PDF 使用打印时那台电脑实际用到的字体。
+
+**尺寸**（数字；超出范围的值钳到边界，非数字的值忽略）
 
 | 字段 | 单位 | 范围 | 默认 | 作用 |
 |---|---|---|---|---|
@@ -59,7 +72,7 @@
 - 用 JSON Patch 修改：`settings` 不存在时，先 `{"op":"add","path":"/settings","value":{}}`，再改 `/settings/<字段>`（直接改子路径会报 path not found）。
 
 ```json
-"settings": { "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
+"settings": { "latinFont": "times", "cjkFont": "kai", "fontSize": 11, "lineHeight": 1.3, "bodyScale": 1, "marginTop": 10, "marginBottom": 12 }
 ```
 
 ## 2. 块（Block）基础结构

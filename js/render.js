@@ -44,7 +44,7 @@ function renderPreview(state) {
     list: zh ? '，' : ', '     // 列表分隔符（中/英）
   };
   const accent = normalizeAccent(state.accent);
-  const vars = layoutStyleVars(state.settings);
+  const vars = layoutStyleVars(state.settings, themeKey);
   $('#preview-pane').innerHTML = '<div class="page ' + themeKey + '" style="--accent:' + accent + vars + '">' + renderSequence(state.blocks, ctx) + '</div>';
   // 打印页边距：@page 不能用 CSS 变量，改写 <head> 里的专用 <style>
   const pageStyle = $('#cv-page-style');

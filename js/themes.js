@@ -38,6 +38,51 @@ const LAYOUT_SETTINGS = [
   { key: 'marginLeft',        group: 2, label: '左',       unit: 'mm', min: 0,   max: 30,  step: 1,    def: 15 }
 ];
 const MARGIN_KEYS = ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'];
+
+/* ---- 中西文字体（state.settings.latinFont / cjkFont） ----
+ * 都是系统字体栈（离线 file:// 也能用）：每项列出 Windows / macOS / Linux 上的同类字体，装了哪个用哪个。
+ * font-family = 西文栈, 中文栈, 通用族：西文字体不含汉字，汉字自动落到中文栈。
+ * 未设置时跟随 theme（classic = Georgia + 宋体，modern = Arial + 黑体），旧数据渲染不变。
+ * 栈里只用单引号：它会被拼进 style="..." 属性。 */
+const FONT_SETTINGS = {
+  latinFont: {
+    label: '西文字体',
+    options: {
+      georgia:  { label: 'Georgia（衬线）',      stack: "Georgia, 'Times New Roman'",                               generic: 'serif' },
+      times:    { label: 'Times New Roman',      stack: "'Times New Roman', Times, 'Liberation Serif'",             generic: 'serif' },
+      garamond: { label: 'Garamond',             stack: "Garamond, 'EB Garamond', 'Adobe Garamond Pro'",            generic: 'serif' },
+      palatino: { label: 'Palatino',             stack: "'Palatino Linotype', Palatino, 'Book Antiqua', 'TeX Gyre Pagella'", generic: 'serif' },
+      arial:    { label: 'Arial（无衬线）',       stack: "Arial, Helvetica, 'Liberation Sans'",                      generic: 'sans-serif' },
+      calibri:  { label: 'Calibri',              stack: 'Calibri, Carlito',                                         generic: 'sans-serif' },
+      system:   { label: '系统无衬线（Segoe / SF）', stack: "'Segoe UI', -apple-system, 'Helvetica Neue', Roboto",   generic: 'sans-serif' }
+    }
+  },
+  cjkFont: {
+    label: '中文字体',
+    options: {
+      song:     { label: '宋体', stack: "'Songti SC', STSong, SimSun, 'Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC'" },
+      hei:      { label: '黑体', stack: "'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC', 'WenQuanYi Zen Hei'" },
+      kai:      { label: '楷体', stack: "'Kaiti SC', STKaiti, KaiTi, 'AR PL UKai CN'" },
+      fangsong: { label: '仿宋', stack: "STFangsong, FangSong, 'FangSong_GB2312'" }
+    }
+  }
+};
+const THEME_FONTS = { classic: { latinFont: 'georgia', cjkFont: 'song' }, modern: { latinFont: 'arial', cjkFont: 'hei' } };
+function isFontSetting(key) { return Object.prototype.hasOwnProperty.call(FONT_SETTINGS, key); }
+// 已设置且合法的字体键，否则 null
+function fontChoice(settings, key) {
+  const v = settings && settings[key];
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(FONT_SETTINGS[key].options, v) ? v : null;
+}
+// 两项都没设置 → ''（交给 .page.classic / .page.modern 的 CSS）；设置了任一项 → 另一项取主题默认
+function fontFamilyCSS(settings, themeKey) {
+  const lat = fontChoice(settings, 'latinFont'), cjk = fontChoice(settings, 'cjkFont');
+  if (!lat && !cjk) return '';
+  const base = THEME_FONTS[themeKey] || THEME_FONTS.classic;
+  const L = FONT_SETTINGS.latinFont.options[lat || base.latinFont];
+  const C = FONT_SETTINGS.cjkFont.options[cjk || base.cjkFont];
+  return L.stack + ', ' + C.stack + ', ' + L.generic;
+}
 function layoutDef(key) { return LAYOUT_SETTINGS.find(d => d.key === key) || null; }
 
 // 校验 + 钳位；非法返回 null。设置值会拼进 style 属性，只放行有限数字
@@ -56,9 +101,11 @@ function hasMarginSettings(settings) {
   return !!settings && MARGIN_KEYS.some(k => clampSetting(k, settings[k]) !== null);
 }
 // .page 的内联 CSS 变量串（只含已设置的项）
-function layoutStyleVars(settings) {
+function layoutStyleVars(settings, themeKey) {
   let s = '';
   if (!settings) return s;
+  const ff = fontFamilyCSS(settings, themeKey);
+  if (ff) s += ';--body-font:' + ff + ';--head-font:' + ff;
   for (const d of LAYOUT_SETTINGS) {
     if (!d.cssVar) continue;
     const v = clampSetting(d.key, settings[d.key]);

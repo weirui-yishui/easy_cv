@@ -275,6 +275,10 @@ body {
 .layout-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
 .layout-row > label { flex: 0 0 64px; }
 .layout-row input[type=range] { flex: 1 1 0; min-width: 0; }
+.layout-row select {
+  flex: 1 1 0; min-width: 0; padding: 4px 6px; border: 1px solid var(--border);
+  border-radius: 6px; font: inherit; font-size: 12px; background: #fff;
+}
 .layout-row input[type=number] {
   flex: none; width: 62px; box-sizing: border-box; padding: 3px 4px; border: 1px solid var(--border);
   border-radius: 6px; font: inherit; font-size: 12px;

@@ -158,6 +158,15 @@ class StateStore {
   }
   // 排版设置：拖动滑块时同一项合并为一步撤销
   setSetting(key, value) {
+    if (isFontSetting(key)) {
+      // '' = 跟随主题（删除该键）；其余必须是已知字体键
+      if (value !== '' && !fontChoice({ [key]: value }, key)) return false;
+      this.state.settings = this.state.settings || {};
+      if (value === '') delete this.state.settings[key];
+      else this.state.settings[key] = value;
+      this.commit(null, 'data');
+      return true;
+    }
     const v = clampSetting(key, value);
     if (v === null) return false;
     this.state.settings = this.state.settings || {};

@@ -279,7 +279,14 @@ function addCustomColor() {
 /* ---- 排版面板 ---- */
 function fmtSetting(v) { return String(Math.round(v * 100) / 100); }
 function buildLayoutMenu() {
-  let html = '';
+  let html = '<div class="layout-group">字体</div>';
+  for (const key of Object.keys(FONT_SETTINGS)) {
+    const f = FONT_SETTINGS[key];
+    html += '<div class="layout-row"><label>' + f.label + '</label><select data-setting="' + key + '">'
+      + '<option value="">跟随主题</option>'
+      + Object.keys(f.options).map(k => '<option value="' + k + '">' + f.options[k].label + '</option>').join('')
+      + '</select></div>';
+  }
   LAYOUT_GROUPS.forEach((g, gi) => {
     html += '<div class="layout-group">' + g + '</div>';
     for (const d of LAYOUT_SETTINGS.filter(x => x.group === gi)) {
@@ -294,7 +301,15 @@ function buildLayoutMenu() {
 }
 // 用当前状态回填面板（打开、撤销、恢复默认后调用）；正在输入的框不动，避免打断输入
 function syncLayoutUI() {
+  const themeFonts = THEME_FONTS[store.state.theme] || THEME_FONTS.classic;
   document.querySelectorAll('#layoutMenu [data-setting]').forEach(el => {
+    const key = el.dataset.setting;
+    if (isFontSetting(key)) {
+      // 「跟随主题」后面标出当前主题实际用的字体
+      el.options[0].textContent = '跟随主题（' + FONT_SETTINGS[key].options[themeFonts[key]].label + '）';
+      el.value = fontChoice(store.state.settings, key) || '';
+      return;
+    }
     if (el === document.activeElement && el.type === 'number') return;
     el.value = fmtSetting(settingValue(store.state.settings, el.dataset.setting));
   });

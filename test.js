@@ -449,6 +449,38 @@ const tests = `
   const near = (a, b) => Math.abs(a - b) < 1e-9;
   assert(near(10.5 * settingValue(null, 'nameScale'), 19) && near(10.5 * settingValue(null, 'contactScale'), 9.5) && near(10.5 * settingValue(null, 'bodyScale'), 10), '默认倍率还原原字号');
 
+  // 16. 中西文字体分开选（settings.latinFont / cjkFont）
+  store.setState(deepClone(SAMPLE));
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('--body-font'), '未选字体：不输出字体变量（由 .page.classic 决定）');
+
+  assert(store.setSetting('cjkFont', 'kai') === true, '选中文字体');
+  const p16a = els['#preview-pane'].innerHTML;
+  assert(p16a.includes("--body-font:Georgia, 'Times New Roman', 'Kaiti SC'"), '只选中文：西文取主题默认 Georgia，中文用楷体');
+  assert(p16a.includes('--head-font:Georgia'), '标题字体同步');
+  assert(/, serif">/.test(p16a), '通用族跟随西文字体（衬线）');
+
+  store.setSetting('latinFont', 'arial');
+  const p16b = els['#preview-pane'].innerHTML;
+  assert(p16b.includes("--body-font:Arial, Helvetica, 'Liberation Sans', 'Kaiti SC'") && /, sans-serif">/.test(p16b), '西文 Arial + 中文楷体，通用族 sans-serif');
+  assert(!/style="[^"]*"[^>]*'Kaiti/.test(p16b) && (p16b.match(/"/g) || []).length % 2 === 0, '字体栈不破坏 style 属性引号');
+
+  store.setTheme('modern');
+  store.setSetting('latinFont', '');
+  assert(!('latinFont' in store.state.settings), "'' = 跟随主题，删除该键");
+  assert(els['#preview-pane'].innerHTML.includes("--body-font:Arial, Helvetica, 'Liberation Sans', 'Kaiti SC'"), 'modern 主题下西文跟随主题 = Arial');
+
+  assert(store.setSetting('cjkFont', 'comic') === false && store.state.settings.cjkFont === 'kai', '未知字体键拒绝且不改状态');
+  store.state.settings.latinFont = "x';background:url(y)";
+  renderPreview(store.state);
+  assert(!els['#preview-pane'].innerHTML.includes('background'), '手改 JSON 的非法字体键被忽略');
+
+  store.undo();
+  assert(store.state.settings.latinFont === 'arial', '字体修改可撤销');
+  store.resetSettings();
+  assert(!els['#preview-pane'].innerHTML.includes('--body-font'), '恢复默认后回到主题字体');
+  store.setTheme('classic');
+
   console.log('ALL SMOKE TESTS PASSED ✅  (' + store.state.blocks.length + ' blocks)');
 })().catch(e => { console.error('FAIL ❌'); console.error(e.stack || e); process.exit(1); });
 `;
